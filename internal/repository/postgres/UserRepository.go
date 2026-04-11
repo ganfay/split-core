@@ -18,8 +18,9 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 }
 
 func (r *UserRepository) Create(ctx context.Context, u *domain.User) (*domain.User, error) {
-	_, err := r.DB.Exec(ctx, `INSERT INTO users (tg_id, username, first_name) 
+	err := r.DB.QueryRow(ctx, `INSERT INTO users (tg_id, username, first_name) 
 	VALUES ($1, $2, $3)
-	RETURNING created_at`, u.TgID, u.Username, u.FirstName, u.CreatedAt)
+	ON CONFLICT (tg_id) DO NOTHING 	
+	RETURNING created_at`, u.TgID, u.Username, u.FirstName).Scan(&u.CreatedAt)
 	return u, err
 }

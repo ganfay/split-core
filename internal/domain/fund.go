@@ -3,7 +3,7 @@ package domain
 import "time"
 
 type Fund struct {
-	ID         int
+	ID         int64
 	Name       string
 	AuthorID   int64
 	InviteCode string

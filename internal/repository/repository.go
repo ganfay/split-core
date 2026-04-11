@@ -12,5 +12,5 @@ type UserRepository interface {
 type FundRepository interface {
 	Create(ctx context.Context, fund *domain.Fund) (*domain.Fund, error)
 	GetByInviteCode(ctx context.Context, code string) (*domain.Fund, error)
-	GetByUserID(ctx context.Context, userID int64) ([]domain.Fund, error)
+	GetByUserID(ctx context.Context, userID int64, limit string, offset string) ([]domain.Fund, error)
 }
