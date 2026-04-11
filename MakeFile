@@ -1,0 +1,8 @@
+include .env
+export .env
+
+migrations-up:
+	migrate -source file://internal/repository/postgres_migrations -database ${DB_URL} up
+
+migrations-down:
+	migrate -source file://internal/repository/postgres_migrations -database ${DB_URL} down
