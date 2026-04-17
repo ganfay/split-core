@@ -36,6 +36,7 @@ const (
 	StateFundMenu
 	StateViewFund
 	StateWaitExpense
+	StateViewBalance
 )
 const (
 	CommandCreateFund = "create_fund"

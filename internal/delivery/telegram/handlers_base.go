@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	tele "gopkg.in/telebot.v4"
 )
@@ -97,16 +98,8 @@ func (h *BotHandler) HandleBack(c tele.Context) error {
 }
 
 func (h *BotHandler) OnText(c tele.Context) error {
-	defer func(c tele.Context, resp ...*tele.CallbackResponse) {
-		err := c.Respond(resp...)
-		if err != nil {
-			slog.Error("OnText error", "err", err, "id", c.Sender().ID)
-		}
-	}(c)
-
 	id := c.Sender().ID
-	err := c.Delete()
-	if err != nil {
+	if err := c.Delete(); err != nil {
 		slog.Error("error delete message", "id", id, "err", err.Error())
 		return err
 	}
@@ -116,6 +109,30 @@ func (h *BotHandler) OnText(c tele.Context) error {
 	text := c.Text()
 	ctx := context.Background()
 	switch ctxUser.State {
+	case StateWaitExpense:
+		storedMsg := &tele.Message{ID: ctxUser.LastMsgID, Chat: c.Chat()}
+		cost, desc, err := utils.ParsePurchase(text)
+		if err != nil {
+			return h.error(c, err.Error(), err.Error(), Edit)
+		}
+		purchase := &domain.Purchase{
+			FundID:      ctxUser.ActiveFundID,
+			PayerID:     id,
+			Amount:      cost,
+			Description: desc,
+		}
+		err = h.fundRepo.CreatePurchase(ctx, purchase)
+		if err != nil {
+			return h.error(c, "Internal error, please try again later", err.Error(), Edit)
+		}
+		h.mu.Lock()
+		ctxUser.State = StateViewFund
+		h.mu.Unlock()
+		msg := fmt.Sprintf("✅You successfully added a purchase at your fund\n\nAmount💲: %.2f\nDescription📝: %s", purchase.Amount, purchase.Description)
+		_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
+		if err != nil {
+			return h.error(c, "Internal error, please try again later", err.Error(), Edit)
+		}
 	case StateWaitFundName:
 		InviteCode := utils.GenerateInviteCode(6)
 		botName := os.Getenv("BOT_NAME")
@@ -126,7 +143,7 @@ func (h *BotHandler) OnText(c tele.Context) error {
 			InviteCode: InviteCode,
 		}
 		slog.Info("Setting up fund", "fund", fund, "id", id)
-		_, err = h.fundRepo.Create(ctx, &fund)
+		_, err := h.fundRepo.Create(ctx, &fund)
 		if err != nil {
 			return h.error(c, "Failed to create fund", err.Error(), Edit)
 		}
@@ -144,14 +161,20 @@ func (h *BotHandler) OnText(c tele.Context) error {
 		fund := &domain.Fund{
 			InviteCode: text,
 		}
-		fund, err = h.fundRepo.GetInfo(ctx, fund)
+		fund, err := h.fundRepo.GetInfo(ctx, fund)
 		if err != nil {
 			return h.error(c, "Failed to get fund", err.Error(), Edit)
 		}
 
 		err = h.fundRepo.AddMember(ctx, fund, id)
 		if err != nil {
-			return h.error(c, "Failed to join the fund", err.Error(), Edit)
+			if strings.Contains(err.Error(), "SQLSTATE 23505") {
+				storedMsg := &tele.Message{ID: ctxUser.LastMsgID, Chat: c.Chat()}
+				msg := "You already <b>exist</b> in this fund✅"
+				_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
+				return err
+			}
+			return h.error(c, "Internal error, try again later", err.Error(), Edit)
 		}
 		h.mu.Lock()
 		storedMsg := &tele.Message{ID: ctxUser.LastMsgID, Chat: c.Chat()}
@@ -168,11 +191,12 @@ func (h *BotHandler) OnText(c tele.Context) error {
 	case StateNone:
 		storedMsg := &tele.Message{ID: ctxUser.LastMsgID, Chat: c.Chat()}
 		msg := "No answer"
-		_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
+		_, err := c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
 		if err != nil {
 			slog.Error("error to edit message", "id", id, "err", err.Error())
 			return err
 		}
+
 	default:
 		panic("You have unstatement case")
 	}

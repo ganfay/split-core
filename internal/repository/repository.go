@@ -18,5 +18,5 @@ type FundRepository interface {
 	AddMember(ctx context.Context, fund *domain.Fund, userID int64) error
 
 	GetPurchasesByFund(ctx context.Context, fund *domain.Fund) ([]domain.Purchase, error)
-	CreatePurchase(ctx context.Context, purchase domain.Purchase) error
+	CreatePurchase(ctx context.Context, purchase *domain.Purchase) error
 }

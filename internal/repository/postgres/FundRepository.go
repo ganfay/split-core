@@ -96,7 +96,7 @@ func (r *FundRepository) GetByUserID(ctx context.Context, userID int64, limit in
 }
 
 func (r *FundRepository) AddMember(ctx context.Context, fund *domain.Fund, userID int64) error {
-	queryMember := `INSERT INTO fund_members (fund_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
+	queryMember := `INSERT INTO fund_members (fund_id, user_id) VALUES ($1, $2)`
 	_, err := r.DB.Exec(ctx, queryMember, fund.ID, userID)
 	return err
 }
@@ -124,7 +124,7 @@ ORDER BY created_at DESC
 	return funds, nil
 }
 
-func (r *FundRepository) CreatePurchase(ctx context.Context, purchase domain.Purchase) error {
+func (r *FundRepository) CreatePurchase(ctx context.Context, purchase *domain.Purchase) error {
 	query := `INSERT INTO purchases
 (fund_id, payer_id, amount, description) 
 VALUES ($1, $2, $3, $4)

@@ -179,3 +179,39 @@ func (h *BotHandler) HandleLogExpense(c tele.Context) error {
 	)
 	return c.Edit(msg, h.BackMenu(), tele.ModeHTML)
 }
+
+func (h *BotHandler) HandleBalance(c tele.Context) error {
+	defer func(c tele.Context, resp ...*tele.CallbackResponse) {
+		err := c.Respond(resp...)
+		if err != nil {
+			slog.Error("Failed to respond to balance message", "err", err)
+		}
+	}(c)
+	h.mu.Lock()
+	ctxUser := h.fetchContext(c.Sender().ID)
+	ctxUser.LastMsgID = c.Message().ID
+	ctxUser.State = StateViewBalance
+	h.mu.Unlock()
+	ctx := context.Background()
+	fund := &domain.Fund{
+		ID: ctxUser.ActiveFundID,
+	}
+	fund, err := h.fundRepo.GetInfo(ctx, fund)
+	if err != nil {
+		return h.error(c, "Internal Error, failed to get info about this fund", err.Error(), Edit)
+	}
+	purchases, err := h.fundRepo.GetPurchasesByFund(ctx, fund)
+	if err != nil {
+		return h.error(c, "Internal Error, failed to get purchases", err.Error(), Edit)
+	}
+	msg := "Purchases for this fund:\n\n\n"
+	for _, p := range purchases {
+		msg += "id:" + fmt.Sprintf("%d", p.ID) + "\n" +
+			"Amount: " + fmt.Sprintf("%.2f", p.Amount) + "\n" +
+			"Description: " + p.Description + "\n" +
+			"PayerID: " + fmt.Sprintf("%d", p.PayerID) + "\n\n"
+	}
+	storedMsg := &tele.Message{ID: ctxUser.LastMsgID, Chat: c.Chat()}
+	_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
+	return err
+}
