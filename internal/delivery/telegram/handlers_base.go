@@ -111,19 +111,9 @@ func (h *BotHandler) OnText(c tele.Context) error {
 	switch ctxUser.State {
 	case StateWaitExpense:
 		storedMsg := &tele.Message{ID: ctxUser.LastMsgID, Chat: c.Chat()}
-		cost, desc, err := utils.ParsePurchase(text)
+		purchase, err := h.fundUC.AddExpense(ctx, c, ctxUser.ActiveFundID)
 		if err != nil {
-			return h.error(c, err.Error(), err.Error(), Edit)
-		}
-		purchase := &domain.Purchase{
-			FundID:      ctxUser.ActiveFundID,
-			PayerID:     id,
-			Amount:      cost,
-			Description: desc,
-		}
-		err = h.purchaseRepo.CreatePurchase(ctx, purchase)
-		if err != nil {
-			return h.error(c, "Internal error, please try again later", err.Error(), Edit)
+			return h.error(c, "Failed to add expense", err.Error(), Edit)
 		}
 		h.mu.Lock()
 		ctxUser.State = StateViewSuccessExp

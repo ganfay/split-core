@@ -58,7 +58,7 @@ func main() {
 	userRepository := postgres.NewUserRepository(pool)
 	fundRepository := postgres.NewFundRepository(pool)
 	purchaseRepository := postgres.NewPurchaseRepository(pool)
-	fundUC := usecase.NewFundUsecase(fundRepository, userRepository)
+	fundUC := usecase.NewFundUsecase(fundRepository, userRepository, purchaseRepository)
 
 	b, err := tele.NewBot(settings)
 	if err != nil {
