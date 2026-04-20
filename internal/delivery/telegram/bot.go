@@ -7,18 +7,18 @@ import (
 )
 
 type BotHandler struct {
-	userState map[int64]*UserContext
-	fundUC    domain.FundUsecase
-	userUC    domain.UserUsecase
-	mu        sync.RWMutex
+	userCtx map[int64]*UserContext
+	fundUC  domain.FundUsecase
+	userUC  domain.UserUsecase
+	mu      sync.RWMutex
 }
 
 func NewBotHandler(fundUC domain.FundUsecase, userUC domain.UserUsecase) *BotHandler {
 	slog.Info("Setting up telegram bot")
 	return &BotHandler{
-		userState: make(map[int64]*UserContext),
-		fundUC:    fundUC,
-		userUC:    userUC,
+		userCtx: make(map[int64]*UserContext),
+		fundUC:  fundUC,
+		userUC:  userUC,
 	}
 }
 

@@ -200,7 +200,7 @@ func (h *BotHandler) HandleHistory(c tele.Context) error {
 	if err != nil {
 		return h.error(c, "Internal Error, failed to get info about this fund", err.Error(), Edit)
 	}
-	purchases, err := h.fundUC.GetPurchasesByFund(ctx, fund)
+	purchases, err := h.fundUC.GetPurchasesByFund(ctx, fund.ID)
 	if err != nil {
 		return h.error(c, "Internal Error, failed to get purchases", err.Error(), Edit)
 	}
@@ -214,4 +214,34 @@ func (h *BotHandler) HandleHistory(c tele.Context) error {
 	storedMsg := &tele.Message{ID: ctxUser.LastMsgID, Chat: c.Chat()}
 	_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
 	return err
+}
+
+func (h *BotHandler) HandleSettleUp(c tele.Context) error {
+	h.mu.Lock()
+	ctxUser := h.fetchContext(c.Sender().ID)
+	ctxUser.LastMsgID = c.Message().ID
+	h.mu.Unlock()
+	err := c.Respond()
+	if err != nil {
+		return h.error(c, "Internal Error, try again later", err.Error(), Edit)
+	}
+	ctx := context.Background()
+	balance, err := h.fundUC.GetBalance(ctx, ctxUser.ActiveFundID)
+	if err != nil {
+		return err
+	}
+	fund := &domain.Fund{
+		ID: ctxUser.ActiveFundID,
+	}
+	fund, err = h.fundUC.GetInfo(ctx, fund)
+	if err != nil {
+		return err
+	}
+	msg := fmt.Sprintf("<b>📊 Settlement for \"%s\"</b>", fund.Name) +
+		"\n\n" + fmt.Sprintf("Total spent: %.2f", balance.TotalAmount) +
+		"\n" + fmt.Sprintf("Average for person: %.2f\n\n<b>✅ Payments to make:</b>\n", balance.Average)
+	for _, debt := range balance.Debts {
+		msg += fmt.Sprintf("🔴%d --> %.2f --> %d", debt.FromID, debt.Amount, debt.ToID)
+	}
+	return c.Edit(msg, h.BackMenu(), tele.ModeHTML)
 }

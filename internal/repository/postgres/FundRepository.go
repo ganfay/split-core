@@ -111,3 +111,27 @@ func (r *FundRepository) IsMember(ctx context.Context, fundID int, userID int64)
 	}
 	return exists, nil
 }
+
+func (r *FundRepository) GetMembers(ctx context.Context, fundID int) ([]domain.User, error) {
+	var users []domain.User
+
+	query := `SELECT f.user_id, u.username, first_name 
+				FROM fund_members f
+				JOIN users u ON f.user_id = u.tg_id
+				WHERE fund_id = $1`
+
+	rows, err := r.DB.Query(ctx, query, fundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var user domain.User
+		err = rows.Scan(&user.TgID, &user.Username, &user.FirstName)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}

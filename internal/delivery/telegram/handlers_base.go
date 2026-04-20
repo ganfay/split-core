@@ -200,7 +200,7 @@ func (h *BotHandler) error(c tele.Context, userMsg string, techMsg string, mode 
 	}
 
 	slog.Error(userMsg, "err", techMsg, "user_id", c.Sender().ID)
-	storedMsg := &tele.Message{ID: h.userState[c.Sender().ID].LastMsgID, Chat: c.Chat()}
+	storedMsg := &tele.Message{ID: h.userCtx[c.Sender().ID].LastMsgID, Chat: c.Chat()}
 	switch mode {
 	case Edit:
 		_, err := c.Bot().Edit(storedMsg, "❌"+userMsg, h.BackMenu(), tele.ModeHTML)
@@ -215,18 +215,18 @@ func (h *BotHandler) error(c tele.Context, userMsg string, techMsg string, mode 
 
 func (h *BotHandler) getUserContext(userID int64) *UserContext {
 	h.mu.Lock()
-	if h.userState[userID] == nil {
-		h.userState[userID] = &UserContext{
+	if h.userCtx[userID] == nil {
+		h.userCtx[userID] = &UserContext{
 			State: StateNone,
 		}
 	}
 	defer h.mu.Unlock()
-	return h.userState[userID]
+	return h.userCtx[userID]
 }
 
 func (h *BotHandler) fetchContext(id int64) *UserContext {
-	if h.userState[id] == nil {
-		h.userState[id] = &UserContext{State: StateNone}
+	if h.userCtx[id] == nil {
+		h.userCtx[id] = &UserContext{State: StateNone}
 	}
-	return h.userState[id]
+	return h.userCtx[id]
 }

@@ -6,6 +6,9 @@ import (
 	"SplitCore/internal/repository"
 	"context"
 	"errors"
+	"log/slog"
+	"math"
+	time "time"
 
 	tele "gopkg.in/telebot.v4"
 )
@@ -21,7 +24,68 @@ func NewFundUsecase(fr repository.FundRepository, pr repository.PurchaseReposito
 }
 
 func (u *FundUsecase) GetBalance(ctx context.Context, fundID int) (*domain.Settlement, error) {
-	return u.GetBalance(ctx, fundID)
+	start := time.Now()
+
+	purchases, err := u.purchaseRepository.GetPurchasesByFund(ctx, fundID)
+	if err != nil {
+		return nil, err
+	}
+	totalAmount := 0.0
+	m := make(map[int64]float64)
+	for _, purchase := range purchases {
+		totalAmount += purchase.Amount
+		m[purchase.PayerID] += purchase.Amount
+	}
+	members, err := u.fundRepository.GetMembers(ctx, fundID)
+	if err != nil {
+		return nil, err
+	}
+	averageAmount := totalAmount / float64(len(members))
+	var creditors []int64
+	var debtors []int64
+	for _, member := range members {
+		m[member.TgID] = m[member.TgID] - averageAmount
+
+		bal := m[member.TgID]
+		if bal > 0.01 {
+			creditors = append(creditors, member.TgID)
+		} else if bal < -0.01 {
+			debtors = append(debtors, member.TgID)
+		}
+	}
+	var debts []domain.Debt
+	// from d -> c
+	for len(debtors) > 0 && len(creditors) > 0 {
+		d := debtors[0]
+		c := creditors[0]
+
+		amount := min(math.Abs(m[d]), m[c])
+
+		m[d] += amount
+		m[c] -= amount
+
+		debt := domain.Debt{
+			FromID: d,
+			ToID:   c,
+			Amount: amount,
+		}
+		debts = append(debts, debt)
+
+		if math.Abs(m[d]) < 0.01 {
+			debtors = debtors[1:]
+		}
+		if math.Abs(m[c]) < 0.01 {
+			creditors = creditors[1:]
+		}
+	}
+	var settlement = &domain.Settlement{
+		TotalAmount: totalAmount,
+		Debts:       debts,
+		Average:     averageAmount,
+	}
+	duration := time.Since(start)
+	slog.Debug("TIME", "duration", duration, "startedAt", start)
+	return settlement, nil
 }
 
 func (u *FundUsecase) AddExpense(ctx context.Context, ctxInfoAboutPurchase tele.Context, fundID int) (*domain.Purchase, error) {
@@ -74,10 +138,14 @@ func (u *FundUsecase) IsMember(ctx context.Context, fundID int, userID int64) (b
 	return u.fundRepository.IsMember(ctx, fundID, userID)
 }
 
-func (u *FundUsecase) GetPurchasesByFund(ctx context.Context, fund *domain.Fund) ([]domain.Purchase, error) {
-	return u.purchaseRepository.GetPurchasesByFund(ctx, fund)
+func (u *FundUsecase) GetPurchasesByFund(ctx context.Context, fundID int) ([]domain.Purchase, error) {
+	return u.purchaseRepository.GetPurchasesByFund(ctx, fundID)
 }
 
 func (u *FundUsecase) CreatePurchase(ctx context.Context, purchase *domain.Purchase) error {
 	return u.purchaseRepository.CreatePurchase(ctx, purchase)
+}
+
+func (u *FundUsecase) GetMembers(ctx context.Context, fundID int) ([]domain.User, error) {
+	return u.fundRepository.GetMembers(ctx, fundID)
 }

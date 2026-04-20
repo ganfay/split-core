@@ -25,3 +25,8 @@ type Debt struct {
 	ToID   int64
 	Amount float64
 }
+
+type Balance struct {
+	UserID  int64
+	Balance float64
+}

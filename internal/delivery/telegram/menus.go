@@ -83,6 +83,6 @@ func (h *BotHandler) MyFundMenu(c tele.Context, offset int) *tele.ReplyMarkup {
 	rows = append(rows, menu.Row(menu.Data("Back", CommandBack)))
 
 	menu.Inline(rows...)
-	h.userState[c.Sender().ID].LastMsgID = c.Message().ID
+	h.userCtx[c.Sender().ID].LastMsgID = c.Message().ID
 	return &menu
 }
