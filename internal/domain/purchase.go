@@ -7,8 +7,7 @@ import (
 type Purchase struct {
 	ID          int
 	FundID      int
-	PayerID     int64
-	PayerName   string
+	Payer       User
 	Amount      float64
 	Description string
 	CreatedAt   time.Time

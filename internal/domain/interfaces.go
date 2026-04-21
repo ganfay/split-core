@@ -15,8 +15,9 @@ type FundUsecase interface {
 	GetByUserID(ctx context.Context, userID int64, limit int, offset int) ([]Fund, error)
 	AddMember(ctx context.Context, fund *Fund, userID int64) error
 	IsMember(ctx context.Context, fundID int, userID int64) (bool, error)
+	GetMembers(ctx context.Context, fundID int) ([]User, error)
 
-	GetPurchasesByFund(ctx context.Context, fundID int) ([]Purchase, error)
+	GetPurchasesByFundPagination(ctx context.Context, fundID int, limit int, offset int) ([]Purchase, error)
 	CreatePurchase(ctx context.Context, purchase *Purchase) error
 }
 

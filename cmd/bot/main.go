@@ -18,7 +18,7 @@ func main() {
 	ctx := context.Background()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		Level: slog.LevelInfo,
 	}))
 	slog.SetDefault(logger)
 
@@ -61,7 +61,7 @@ func main() {
 
 	fundUC := usecase.NewFundUsecase(fundRepository, purchaseRepository)
 	userUC := usecase.NewUserUsecase(userRepository)
-	
+
 	h := telegram.NewBotHandler(fundUC, userUC)
 
 	b, err := tele.NewBot(settings)

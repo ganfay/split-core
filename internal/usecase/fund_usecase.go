@@ -25,16 +25,17 @@ func NewFundUsecase(fr repository.FundRepository, pr repository.PurchaseReposito
 
 func (u *FundUsecase) GetBalance(ctx context.Context, fundID int) (*domain.Settlement, error) {
 	start := time.Now()
-
-	purchases, err := u.purchaseRepository.GetPurchasesByFund(ctx, fundID)
+	slog.Debug("request", "fundID", fundID, "maxint", math.MaxInt, "start", start, "ctx", ctx)
+	purchases, err := u.purchaseRepository.GetPurchasesByFundAll(ctx, fundID)
 	if err != nil {
+		slog.Debug("GetBalance", "purchases", purchases, "error", err)
 		return nil, err
 	}
 	totalAmount := 0.0
 	m := make(map[int64]float64)
 	for _, purchase := range purchases {
 		totalAmount += purchase.Amount
-		m[purchase.PayerID] += purchase.Amount
+		m[purchase.Payer.TgID] += purchase.Amount
 	}
 	members, err := u.fundRepository.GetMembers(ctx, fundID)
 	if err != nil {
@@ -84,7 +85,7 @@ func (u *FundUsecase) GetBalance(ctx context.Context, fundID int) (*domain.Settl
 		Average:     averageAmount,
 	}
 	duration := time.Since(start)
-	slog.Debug("TIME", "duration", duration, "startedAt", start)
+	slog.Debug("settlements", "debts", debts, "totalAmount", totalAmount, "duration", duration, "startedAt", start, "err", err, "creditors", creditors, "purchases", purchases)
 	return settlement, nil
 }
 
@@ -100,10 +101,15 @@ func (u *FundUsecase) AddExpense(ctx context.Context, ctxInfoAboutPurchase tele.
 	if cost <= 0 {
 		return nil, errors.New("invalid amount")
 	}
-
+	if len(desc) > 200 {
+		desc = desc[:197] + "..."
+	}
+	user := domain.User{
+		TgID: ctxInfoAboutPurchase.Sender().ID,
+	}
 	purchase := &domain.Purchase{
 		FundID:      fundID,
-		PayerID:     ctxInfoAboutPurchase.Sender().ID,
+		Payer:       user,
 		Amount:      cost,
 		Description: desc,
 	}
@@ -138,8 +144,8 @@ func (u *FundUsecase) IsMember(ctx context.Context, fundID int, userID int64) (b
 	return u.fundRepository.IsMember(ctx, fundID, userID)
 }
 
-func (u *FundUsecase) GetPurchasesByFund(ctx context.Context, fundID int) ([]domain.Purchase, error) {
-	return u.purchaseRepository.GetPurchasesByFund(ctx, fundID)
+func (u *FundUsecase) GetPurchasesByFundPagination(ctx context.Context, fundID int, limit int, offset int) ([]domain.Purchase, error) {
+	return u.purchaseRepository.GetPurchasesByFundPagination(ctx, fundID, limit, offset)
 }
 
 func (u *FundUsecase) CreatePurchase(ctx context.Context, purchase *domain.Purchase) error {
@@ -148,4 +154,8 @@ func (u *FundUsecase) CreatePurchase(ctx context.Context, purchase *domain.Purch
 
 func (u *FundUsecase) GetMembers(ctx context.Context, fundID int) ([]domain.User, error) {
 	return u.fundRepository.GetMembers(ctx, fundID)
+}
+
+func (u *FundUsecase) GetPurchasesByFundAll(ctx context.Context, fundID int) ([]domain.Purchase, error) {
+	return u.purchaseRepository.GetPurchasesByFundAll(ctx, fundID)
 }

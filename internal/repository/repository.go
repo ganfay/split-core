@@ -21,6 +21,7 @@ type FundRepository interface {
 }
 
 type PurchaseRepository interface {
-	GetPurchasesByFund(ctx context.Context, fundID int) ([]domain.Purchase, error)
+	GetPurchasesByFundPagination(ctx context.Context, fundID int, limit int, offset int) ([]domain.Purchase, error)
+	GetPurchasesByFundAll(ctx context.Context, fundID int) ([]domain.Purchase, error)
 	CreatePurchase(ctx context.Context, purchase *domain.Purchase) error
 }

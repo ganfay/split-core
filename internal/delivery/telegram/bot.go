@@ -47,17 +47,21 @@ const (
 	StateWaitExpense
 	StateViewHistory
 	StateViewSuccessExp
+	StateViewSettleUp
+	StateViewMembers
 )
 const (
-	CommandCreateFund = "create_fund"
-	CommandMyFund     = "my_fund"
-	CommandJoinFund   = "join_fund"
-	CommandBack       = "back"
-	CommandNext       = "next"
-	CommandPrevious   = "previous"
-	CommandFund       = "view_fund"
-	CommandLogExpense = "log_expense"
-	CommandLogs       = "logs"
-	CommandSettleUp   = "settle_up"
-	CommandMembers    = "members"
+	CommandCreateFund  = "create_fund"
+	CommandMyFund      = "my_fund"
+	CommandJoinFund    = "join_fund"
+	CommandBack        = "back"
+	CommandNextMF      = "next_mf"
+	CommandPreviousMF  = "previous_mf"
+	CommandFund        = "view_fund"
+	CommandLogExpense  = "log_expense"
+	CommandLogs        = "logs"
+	CommandSettleUp    = "settle_up"
+	CommandMembers     = "members"
+	CommandPreviousVFL = "previous_vfl"
+	CommandNextVFL     = "settle_up_vfl"
 )

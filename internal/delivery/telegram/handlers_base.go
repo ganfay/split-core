@@ -56,7 +56,9 @@ func (h *BotHandler) HandleStart(c tele.Context) error {
 		return c.Reply(msg, h.MainMenu(), tele.ModeHTML)
 	}
 	// if url invite code
-	msg := "👋 Hello! I'm your expense helper. Use the menu below:"
+	msg := "👋 <b>Welcome to SplitCore!</b>\n\n" +
+		"I will help you and your friends easily track shared expenses and settle debts.\n\n" +
+		"👇 <i>Choose an action below to get started:</i>"
 	return c.Reply(msg, h.MainMenu(), tele.ModeHTML)
 }
 
@@ -73,7 +75,7 @@ func (h *BotHandler) HandleBack(c tele.Context) error {
 	slog.Debug("Handling back", "state", ctxUser.State)
 
 	switch ctxUser.State {
-	case StateWaitExpense, StateViewHistory, StateViewSuccessExp:
+	case StateWaitExpense, StateViewHistory, StateViewSuccessExp, StateViewSettleUp, StateViewMembers:
 		h.mu.Lock()
 		ctxUser.State = StateViewFund
 		h.mu.Unlock()
@@ -89,7 +91,9 @@ func (h *BotHandler) HandleBack(c tele.Context) error {
 		h.mu.Lock()
 		ctxUser.State = StateNone
 		h.mu.Unlock()
-		msg := "👋 Hello! I'm your expense helper. Use the menu below:"
+		msg := "👋 <b>Welcome to SplitCore!</b>\n\n" +
+			"I will help you and your friends easily track shared expenses and settle debts.\n\n" +
+			"👇 <i>Choose an action below to get started:</i>"
 		return c.Edit(msg, h.MainMenu(), tele.ModeHTML)
 
 	default:
@@ -176,7 +180,7 @@ func (h *BotHandler) OnText(c tele.Context) error {
 		}
 		ctxUser.LastMsgID = ctxMsg.ID
 		slog.Info("Setting up fund join code", "id", id)
-	case StateNone:
+	case StateNone, StateViewHistory, StateFundMenu, StateViewFund, StateViewSettleUp, StateViewMembers, StateViewSuccessExp:
 		storedMsg := &tele.Message{ID: ctxUser.LastMsgID, Chat: c.Chat()}
 		msg := "No answer"
 		_, err := c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
@@ -195,22 +199,27 @@ func (h *BotHandler) OnText(c tele.Context) error {
 }
 
 func (h *BotHandler) error(c tele.Context, userMsg string, techMsg string, mode SendMode) error {
+	slog.Error("Technical error", "msg", techMsg, "user_id", c.Sender().ID)
+
+	displayMsg := "⚠️ <b>Oops! Something went wrong</b>\n\n" + userMsg
+
 	if c.Callback() != nil {
 		_ = c.Respond()
 	}
 
-	slog.Error(userMsg, "err", techMsg, "user_id", c.Sender().ID)
-	storedMsg := &tele.Message{ID: h.userCtx[c.Sender().ID].LastMsgID, Chat: c.Chat()}
+	userCtx := h.getUserContext(c.Sender().ID)
+	storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
+
 	switch mode {
 	case Edit:
-		_, err := c.Bot().Edit(storedMsg, "❌"+userMsg, h.BackMenu(), tele.ModeHTML)
-		return err
-	case Reply:
-		return c.Reply("❌"+userMsg, h.BackMenu(), tele.ModeHTML)
-	case Send:
-		return c.Send("❌"+userMsg, h.BackMenu(), tele.ModeHTML)
+		if userCtx.LastMsgID != 0 {
+			_, err := c.Bot().Edit(storedMsg, displayMsg, h.BackMenu(), tele.ModeHTML)
+			return err
+		}
+		return c.Send(displayMsg, h.BackMenu(), tele.ModeHTML)
+	default:
+		return c.Send(displayMsg, h.BackMenu(), tele.ModeHTML)
 	}
-	return fmt.Errorf("send error")
 }
 
 func (h *BotHandler) getUserContext(userID int64) *UserContext {
