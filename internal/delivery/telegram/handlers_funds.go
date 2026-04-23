@@ -78,7 +78,6 @@ func (h *BotHandler) HandleMyFund(c tele.Context) error {
 	userCtx.LastMsgID = c.Message().ID
 	storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
 	_, err = c.Bot().Edit(storedMsg, msg, h.MyFundMenu(c, 0), tele.ModeHTML)
-	slog.Error("Failed to send me fund message", "err", err)
 	return err
 }
 
@@ -119,13 +118,12 @@ func (h *BotHandler) HandleViewFund(c tele.Context) error {
 	if err != nil {
 		return h.error(c, "Internal error try again later", err.Error(), Edit)
 	}
-	defer saveCtx()
 	userCtx.ActiveFundID = fundId
+	saveCtx()
 	err = h.HandleFund(c)
 	if err != nil {
 		err = h.error(c, "Internal Error, try again later", err.Error(), Edit)
 	}
-	slog.Debug("", "id", fundId)
 	return err
 }
 
