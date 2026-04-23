@@ -1,16 +1,15 @@
 package main
 
 import (
+	"SplitCore/internal/config"
 	"SplitCore/internal/delivery/telegram"
 	"SplitCore/internal/repository/postgres"
 	"SplitCore/internal/usecase"
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"time"
 
-	"github.com/joho/godotenv"
 	tele "gopkg.in/telebot.v4"
 )
 
@@ -22,34 +21,14 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	if err := godotenv.Load(".env"); err != nil {
-		slog.Error("Error loading .env file", "error", err)
-		os.Exit(1)
-	}
-
-	token := os.Getenv("TOKEN")
-	if token == "" {
-		slog.Error("BOT_TOKEN env var is missing")
-		os.Exit(1)
-	}
+	cfg := config.LoadConfig()
 
 	settings := tele.Settings{
-		Token:  token,
+		Token:  cfg.BotToken,
 		Poller: &tele.LongPoller{Timeout: 10 * time.Second},
 	}
 
-	PgUser := os.Getenv("PG_USER")
-	PgPass := os.Getenv("PG_PASS")
-	PgDb := os.Getenv("PG_DB")
-	PgHost := os.Getenv("PG_HOST")
-	PgPort := os.Getenv("PG_PORT")
-	if PgDb == "" || PgUser == "" || PgPass == "" || PgHost == "" || PgPort == "" {
-		slog.Error("PG_USER, PG_PASSWORD and PG_DB env vars are missing")
-		os.Exit(1)
-	}
-	url := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=disable", PgUser, PgPass, PgHost, PgPort, PgDb)
-
-	pool, err := postgres.NewPostgresPool(ctx, url)
+	pool, err := postgres.NewPostgresPool(ctx, cfg.Postgres.URL())
 	if err != nil {
 		slog.Error("Error connecting to database", "err", err)
 		os.Exit(1)
@@ -70,7 +49,7 @@ func main() {
 		os.Exit(1)
 	}
 	h.SetupRegister(b)
-	vBot := os.Getenv("BOT_VER")
-	slog.Info("Starting bot", "version", vBot, "env", "dev")
+
+	slog.Info("Starting bot", "version", cfg.BotVersion, "env", "dev")
 	b.Start()
 }

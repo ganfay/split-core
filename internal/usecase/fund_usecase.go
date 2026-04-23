@@ -16,7 +16,6 @@ import (
 type FundUsecase struct {
 	fundRepository     repository.FundRepository
 	purchaseRepository repository.PurchaseRepository
-	userRepository     repository.UserRepository
 }
 
 func NewFundUsecase(fr repository.FundRepository, pr repository.PurchaseRepository) *FundUsecase {
