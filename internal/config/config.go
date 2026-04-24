@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"log/slog"
 
 	"github.com/ilyakaznacheev/cleanenv"
@@ -38,9 +39,15 @@ func (r RedisConfig) Addr() string {
 }
 
 func LoadConfig() *Config {
-	var config Config
-	if err := cleanenv.ReadConfig(".env", &config); err != nil {
-		slog.Error("Error loading config", "error", err)
+	var cfg Config
+
+	err := cleanenv.ReadConfig(".env", &cfg)
+	if err != nil {
+		slog.Info(".env file not found, reading from system env variables")
+		if errEnv := cleanenv.ReadEnv(&cfg); errEnv != nil {
+			log.Fatalf("Config error: %s", errEnv)
+		}
 	}
-	return &config
+
+	return &cfg
 }

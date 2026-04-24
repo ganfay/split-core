@@ -17,6 +17,4 @@ WORKDIR /root/
 
 COPY --from=builder /app/bot .
 
-COPY .env .
-
 CMD ["./bot"]
