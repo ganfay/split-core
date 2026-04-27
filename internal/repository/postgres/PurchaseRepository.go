@@ -20,8 +20,8 @@ func NewPurchaseRepository(pool *pgxpool.Pool) *PurchaseRepository {
 func (r *PurchaseRepository) GetPurchasesByFundPagination(ctx context.Context, fundID int, limit int, offset int) ([]domain.Purchase, error) {
 	query := `
 SELECT p.id, p.fund_id, p.payer_id, u.username, u.first_name, p.amount, p.description, p.created_at
-FROM purchases p 
-JOIN users u ON p.payer_id = u.tg_id
+FROM app.purchases p 
+JOIN app.users u ON p.payer_id = u.tg_id
 WHERE p.fund_id = $1
 ORDER BY created_at DESC
 OFFSET $2 LIMIT $3
@@ -45,8 +45,8 @@ OFFSET $2 LIMIT $3
 func (r *PurchaseRepository) GetPurchasesByFundAll(ctx context.Context, fundID int) ([]domain.Purchase, error) {
 	query := `
 SELECT p.id, p.fund_id, p.payer_id, u.username, u.first_name, p.amount, p.description, p.created_at
-FROM purchases p 
-JOIN users u ON p.payer_id = u.tg_id
+FROM app.purchases p 
+JOIN app.users u ON p.payer_id = u.tg_id
 WHERE p.fund_id = $1
 ORDER BY created_at DESC
 `
@@ -67,7 +67,7 @@ ORDER BY created_at DESC
 }
 
 func (r *PurchaseRepository) CreatePurchase(ctx context.Context, purchase *domain.Purchase) error {
-	query := `INSERT INTO purchases
+	query := `INSERT INTO app.purchases
 (fund_id, payer_id, amount, description) 
 VALUES ($1, $2, $3, $4)
 `

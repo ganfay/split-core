@@ -32,7 +32,7 @@ func (r *FundRepository) CreateFund(ctx context.Context, fund *domain.Fund) (*do
 		}
 	}(tx, ctx)
 
-	err = r.DB.QueryRow(ctx, `INSERT INTO funds
+	err = r.DB.QueryRow(ctx, `INSERT INTO app.funds
     (name, author_id, invite_code) 
 	VALUES ($1, $2, $3) 
 	ON CONFLICT DO NOTHING
@@ -40,7 +40,7 @@ func (r *FundRepository) CreateFund(ctx context.Context, fund *domain.Fund) (*do
 	if err != nil {
 		return nil, err
 	}
-	queryMember := `INSERT INTO fund_members (fund_id, user_id) VALUES ($1, $2)`
+	queryMember := `INSERT INTO app.fund_members (fund_id, user_id) VALUES ($1, $2)`
 	_, err = tx.Exec(ctx, queryMember, fund.ID, fund.AuthorID)
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func (r *FundRepository) GetInfo(ctx context.Context, reqFund *domain.Fund) (*do
 	var fund domain.Fund
 	query := `
 		SELECT id, name, author_id, invite_code, created_at 
-		FROM funds 
+		FROM app.funds 
 		WHERE id = $1 OR (invite_code = $2 AND $2 <> '') 
 		LIMIT 1`
 
@@ -71,8 +71,8 @@ func (r *FundRepository) GetInfo(ctx context.Context, reqFund *domain.Fund) (*do
 func (r *FundRepository) GetByUserID(ctx context.Context, userID int64, limit int, offset int) ([]domain.Fund, error) {
 	query := `
         SELECT f.id, f.name, f.author_id, f.invite_code, f.created_at
-        FROM funds f
-        JOIN fund_members fm ON f.id = fm.fund_id
+        FROM app.funds f
+        JOIN app.fund_members fm ON f.id = fm.fund_id
         WHERE fm.user_id = $1
         ORDER BY f.created_at DESC
         LIMIT $2 OFFSET $3`
@@ -96,13 +96,13 @@ func (r *FundRepository) GetByUserID(ctx context.Context, userID int64, limit in
 }
 
 func (r *FundRepository) AddMember(ctx context.Context, fund *domain.Fund, userID int64) error {
-	queryMember := `INSERT INTO fund_members (fund_id, user_id) VALUES ($1, $2)`
+	queryMember := `INSERT INTO app.fund_members (fund_id, user_id) VALUES ($1, $2)`
 	_, err := r.DB.Exec(ctx, queryMember, fund.ID, userID)
 	return err
 }
 
 func (r *FundRepository) IsMember(ctx context.Context, fundID int, userID int64) (bool, error) {
-	query := `SELECT EXISTS(SELECT 1 FROM fund_members WHERE user_id = $1 AND fund_id = $2)`
+	query := `SELECT EXISTS(SELECT 1 FROM app.fund_members WHERE user_id = $1 AND fund_id = $2)`
 
 	var exists bool
 	err := r.DB.QueryRow(ctx, query, userID, fundID).Scan(&exists)
@@ -116,8 +116,8 @@ func (r *FundRepository) GetMembers(ctx context.Context, fundID int) ([]domain.U
 	var users []domain.User
 
 	query := `SELECT f.user_id, u.username, first_name 
-				FROM fund_members f
-				JOIN users u ON f.user_id = u.tg_id
+				FROM app.fund_members f
+				JOIN app.users u ON f.user_id = u.tg_id
 				WHERE fund_id = $1`
 
 	rows, err := r.DB.Query(ctx, query, fundID)

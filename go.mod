@@ -4,7 +4,7 @@ go 1.26.2
 
 require (
 	github.com/ilyakaznacheev/cleanenv v1.5.0
-	github.com/jackc/pgx/v5 v5.9.1
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/redis/go-redis/v9 v9.18.0
 	gopkg.in/telebot.v4 v4.0.0-beta.7
 )
