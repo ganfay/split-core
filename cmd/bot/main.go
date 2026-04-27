@@ -8,6 +8,7 @@ import (
 
 	"github.com/ganfay/split-core/internal/config"
 	"github.com/ganfay/split-core/internal/delivery/telegram"
+	"github.com/ganfay/split-core/internal/pkg/logger"
 	"github.com/ganfay/split-core/internal/repository/postgres"
 	"github.com/ganfay/split-core/internal/repository/redisRepository"
 	"github.com/ganfay/split-core/internal/usecase"
@@ -20,12 +21,9 @@ import (
 func main() {
 	ctx := context.Background()
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}))
-	slog.SetDefault(logger)
-
 	cfg := config.LoadConfig()
+
+	logger.SetupLogger(cfg.Env)
 
 	settings := tele.Settings{
 		Token:  cfg.BotToken,
