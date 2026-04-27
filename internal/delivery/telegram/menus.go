@@ -36,8 +36,8 @@ func (h *BotHandler) BackMenu() *tele.ReplyMarkup {
 func (h *BotHandler) MenuViewFundLogs(offset int, p []domain.Purchase) *tele.ReplyMarkup {
 	menu := tele.ReplyMarkup{ResizeKeyboard: true}
 	limit := 7
-	btnPrev := menu.Data("⬅️ Prev", CommandPreviousVFL, fmt.Sprintf(strconv.Itoa(offset-limit)))
-	btnNext := menu.Data("Next ➡️", CommandNextVFL, fmt.Sprintf(strconv.Itoa(offset+limit)))
+	btnPrev := menu.Data("⬅️ Prev", CommandPreviousVFL, strconv.Itoa(offset-limit))
+	btnNext := menu.Data("Next ➡️", CommandNextVFL, strconv.Itoa(offset+limit))
 	btnBack := menu.Data("⬅️⬅️Back", CommandBack)
 
 	var rows []tele.Row

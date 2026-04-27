@@ -49,6 +49,6 @@ func LoadConfig() *Config {
 			log.Fatalf("Config error: %s", errEnv)
 		}
 	}
-
+	slog.Info("Config loaded")
 	return &cfg
 }

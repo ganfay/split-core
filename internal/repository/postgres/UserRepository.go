@@ -2,9 +2,11 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/ganfay/split-core/internal/domain"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -23,7 +25,12 @@ func (r *UserRepository) CreateUser(ctx context.Context, u *domain.User) (*domai
 	VALUES ($1, $2, $3)
 	ON CONFLICT (tg_id) DO NOTHING 	
 	RETURNING created_at`, u.TgID, u.Username, u.FirstName).Scan(&u.CreatedAt)
-	return u, err
+	if errors.Is(err, pgx.ErrNoRows) {
+		return u, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return u, nil
 }
 
 func (r *UserRepository) GetUser(ctx context.Context, tgID int64) (*domain.User, error) {

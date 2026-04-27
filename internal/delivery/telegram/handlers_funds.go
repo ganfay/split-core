@@ -92,6 +92,9 @@ func (h *BotHandler) HandleNextPreviousMF(c tele.Context) error {
 	}(c)
 	ctx := context.Background()
 	offset, err := strconv.Atoi(c.Data())
+	if err != nil {
+		return h.error(c, "Internal error try again later", err.Error(), Edit)
+	}
 	userCtx, saveCtx, err := h.getUserCtxH(c, ctx)
 	if err != nil {
 		return h.error(c, "Internal error try again later", err.Error(), Edit)
@@ -149,8 +152,6 @@ func (h *BotHandler) HandleFund(c tele.Context) error {
 	fund := &domain.Fund{
 		ID: fundId,
 	}
-	slog.Debug("", "id", fundId)
-
 	fund, err = h.fundUC.GetInfo(ctx, fund)
 	if err != nil {
 		return h.error(c, "Internal Error, failed to get info about this fund, try again later", err.Error(), Edit)
@@ -222,7 +223,7 @@ func (h *BotHandler) HandleHistory(c tele.Context) error {
 		return h.error(c, "Internal Error, try again later", err.Error(), Edit)
 	}
 	if offset < 0 {
-		return h.error(c, "Internal Error, try again later", fmt.Sprintf("offset < 0"), Edit)
+		return h.error(c, "Internal Error, try again later", "offset < 0", Edit)
 	}
 	fund := &domain.Fund{
 		ID: userCtx.ActiveFundID,

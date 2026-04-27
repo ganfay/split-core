@@ -14,12 +14,6 @@ import (
 )
 
 func (h *BotHandler) HandleStart(c tele.Context) error {
-	defer func(c tele.Context, resp ...*tele.CallbackResponse) {
-		err := c.Respond(resp...)
-		if err != nil {
-			slog.Error("Error while handling start", "err", err.Error())
-		}
-	}(c)
 	ctx := context.Background()
 	var user domain.User
 	user.TgID = c.Sender().ID
@@ -158,11 +152,16 @@ func (h *BotHandler) OnText(c tele.Context) error {
 			Name:       text,
 			InviteCode: InviteCode,
 		}
-		slog.Info("Setting up fund", "fund", fund, "id", id)
 		_, err := h.fundUC.CreateFund(ctx, &fund)
 		if err != nil {
 			return h.error(c, "Failed to create fund", err.Error(), Edit)
 		}
+		slog.Info("Setting up fund",
+			slog.Int("FundID", fund.ID),
+			slog.Int64("AuthorID", id),
+			slog.String("Name", fund.Name),
+			slog.String("ICode", fund.InviteCode),
+		)
 		storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
 		msg := fmt.Sprintf("Fund Created🎉!\n\nFund Code🔑: <code>%s</code>\nFund URL🌐: <code>%s</code>\n\n You can share URL or Code with users your fund👍", fund.InviteCode, InviteCodeInviteURL)
 		ctxMsg, err := c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
@@ -185,6 +184,7 @@ func (h *BotHandler) OnText(c tele.Context) error {
 			if strings.Contains(err.Error(), "SQLSTATE 23505") {
 				storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
 				msg := "You already <b>exist</b> in this fund✅"
+				slog.Info("User already exist in fund", "user_id", id, "fund_id", fund.ID)
 				_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
 				return err
 			}

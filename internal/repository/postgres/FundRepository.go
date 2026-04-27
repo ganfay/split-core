@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/ganfay/split-core/internal/domain"
@@ -25,14 +26,13 @@ func (r *FundRepository) CreateFund(ctx context.Context, fund *domain.Fund) (*do
 	if err != nil {
 		return nil, err
 	}
-	defer func(tx pgx.Tx, ctx context.Context) {
+	defer func() {
 		err := tx.Rollback(ctx)
-		if err != nil {
-			slog.Debug("rollback", "err", err)
-			return
+		if err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			slog.Error("Failed to rollback transaction", slog.Any("err", err))
 		}
-	}(tx, ctx)
-
+	}()
+	
 	err = r.DB.QueryRow(ctx, `INSERT INTO app.funds
     (name, author_id, invite_code) 
 	VALUES ($1, $2, $3) 
