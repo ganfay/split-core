@@ -9,12 +9,12 @@ import (
 )
 
 func SetupLogger(env string) *slog.Logger {
-	err := os.MkdirAll("out", 0755)
+	err := os.MkdirAll("out/logs", 0755)
 	if err != nil {
 		panic("Failed to create/open log dir: " + err.Error())
 	}
 	lumberjackLogger := &lumberjack.Logger{
-		Filename:   "out/app.log",
+		Filename:   "out/logs/app.log",
 		MaxSize:    10,
 		MaxBackups: 5,
 		MaxAge:     30,

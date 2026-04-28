@@ -58,7 +58,11 @@ logs:
 	docker logs --tail=100 $(name)
 
 lint:
-	golangci-lint run ${PROJECT_ROOT}
+	@golangci-lint run ${PROJECT_ROOT}
 
 build:
-	go build -o ./bin/bot ./cmd/bot/main.go
+	@go build -o ./bin/bot ./cmd/bot/main.go
+
+run-services:
+	@mkdir -p "out/logs"
+	@docker compose up -d --build

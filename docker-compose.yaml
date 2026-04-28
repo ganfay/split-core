@@ -16,7 +16,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
   app:
     build: .
     container_name: split_core_app
@@ -28,6 +27,9 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    volumes:
+      - ${PROJECT_ROOT}/out:/app/out
+    user: "${UID}:${GID}"
     environment:
       TOKEN: ${TOKEN}
       BOT_NAME: ${BOT_NAME}
@@ -44,7 +46,6 @@ services:
     user: "${UID}:${GID}"
     volumes:
       - ${PROJECT_ROOT}/internal/repository/postgres_migrations:/migrations
-
   redis:
     image: redis:8.6.2-alpine
     container_name: split_core_redis
