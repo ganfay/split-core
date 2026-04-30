@@ -1,5 +1,5 @@
 # 🚀 SplitCore — Telegram Expense Organizer
-
+[![SplitCore CI](https://github.com/GanFay/SplitCore/actions/workflows/ci.yml/badge.svg)](https://github.com/GanFay/SplitCore/actions/workflows/ci.yml)
 **SplitCore** is a Telegram bot designed to automate shared expense tracking for groups of friends, travelers, or event organizers. No more messy Excel sheets or "who owes whom" arguments.
 
 ## 🔥 The Core Idea
@@ -15,7 +15,7 @@ Users create "Funds" (events), invite friends via unique deep-links, and record 
 * **Framework:**[telebot.v4](https://github.com/tucnak/telebot) (Telegram Bot API)
 * **Database:** PostgreSQL
 * **Driver:** [pgx/v5](https://github.com/jackc/pgx) (Connection Pool)
-* **State Management:** In-memory FSM (Finite State Machine) with Mutex locks.
+* **State Management:** Redis 8.6.2 via `go-redis/v9` for persistent FSM.
 * **Infrastructure:** Docker, Docker Compose, Makefile.
 * **Migrations:** [golang-migrate](https://github.com/golang-migrate/migrate).
 
@@ -30,7 +30,7 @@ The project is built with a strict separation of concerns, ensuring high testabi
 
 ## 📍 Roadmap
 **Phase 1: MVP (Completed) ✅**
-- [x] Clean Architecture setup and Dependency Injection.
+-[x] Clean Architecture setup and Dependency Injection.
 - [x] PostgreSQL integration with migrations.
 - [x] FSM for user input handling and seamless UX.
 - [x] Fund creation and unique Deep-Link generation.
@@ -38,13 +38,13 @@ The project is built with a strict separation of concerns, ensuring high testabi
 - [x] Advanced debt calculation algorithm (Settle Up).
 - [x] Move FSM states from in-memory to Redis for persistence and horizontal scaling.
 - [x] Graceful shutdown implementation.
+- [x] Table-Driven Unit Tests for the settlement math module.
+- [x] CI/CD Pipeline (GitHub Actions + golangci-lint).
 
 **Phase 2: Enhancements (Future) 🚀**
-
-- [ ] Add unit tests for the settlement math module.
-- [ ] CI/CD
-- [ ] Deploy
-- [ ] New features (multivalutes, virtual users)
+- [ ] Deploy to VPS (DigitalOcean).
+- [ ] Virtual Users (Add members without Telegram accounts).
+- [ ] Multi-currency support.
 
 ## 🚀 Getting Started (Dev)
 
