@@ -17,7 +17,7 @@ Users create "Funds" (events), invite friends via unique deep-links, and record 
 * **Framework:**[telebot.v4](https://github.com/tucnak/telebot) (Telegram Bot API)
 * **Database:** PostgreSQL
 * **Driver:** [pgx/v5](https://github.com/jackc/pgx) (Connection Pool)
-* **State Management:** Redis 8.6.2 via `go-redis/v9` for persistent FSM.
+* **State Management:** Redis 8.6.2 via [go-redis/v9](https://github.com/redis/go-redis) for persistent FSM.
 * **Infrastructure:** Docker, Docker Compose, Makefile.
 * **Migrations:** [golang-migrate](https://github.com/golang-migrate/migrate).
 
