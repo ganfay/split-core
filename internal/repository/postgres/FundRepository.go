@@ -32,7 +32,7 @@ func (r *FundRepository) CreateFund(ctx context.Context, fund *domain.Fund) (*do
 			slog.Error("Failed to rollback transaction", slog.Any("err", err))
 		}
 	}()
-	
+
 	err = r.DB.QueryRow(ctx, `INSERT INTO app.funds
     (name, author_id, invite_code) 
 	VALUES ($1, $2, $3) 
@@ -116,9 +116,9 @@ func (r *FundRepository) IsMember(ctx context.Context, fundID int, userID int64)
 func (r *FundRepository) GetMembers(ctx context.Context, fundID int) ([]domain.User, error) {
 	var users []domain.User
 
-	query := `SELECT f.user_id, u.username, first_name 
+	query := `SELECT f.user_id, u.tg_id, u.username, first_name 
 				FROM app.fund_members f
-				JOIN app.users u ON f.user_id = u.tg_id
+				JOIN app.users u ON f.user_id = u.id
 				WHERE fund_id = $1`
 
 	rows, err := r.DB.Query(ctx, query, fundID)
@@ -128,7 +128,7 @@ func (r *FundRepository) GetMembers(ctx context.Context, fundID int) ([]domain.U
 	defer rows.Close()
 	for rows.Next() {
 		var user domain.User
-		err = rows.Scan(&user.TgID, &user.Username, &user.FirstName)
+		err = rows.Scan(&user.ID, &user.TgID, &user.Username, &user.FirstName)
 		if err != nil {
 			return nil, err
 		}

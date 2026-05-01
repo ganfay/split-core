@@ -28,7 +28,7 @@ func (r *UserRepository) GetOrCreateRealUser(ctx context.Context, tgID *int64, u
 	ON CONFLICT (tg_id) DO UPDATE 
 		SET username = EXCLUDED.username, first_name = EXCLUDED.first_name
 	RETURNING id`
-	err := r.DB.QueryRow(ctx, query, tgID, username, firstName).Scan(&id)
+	err := r.DB.QueryRow(ctx, query, *tgID, username, firstName).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return id, nil
 	} else if err != nil {
@@ -56,7 +56,7 @@ func (r *UserRepository) GetUserByIID(ctx context.Context, iID int64) (*domain.U
 	var u domain.User
 	query := `
 SELECT tg_id, username, first_name, is_virtual, created_at FROM app.users WHERE id = $1`
-	err := r.DB.QueryRow(ctx, query, iID).Scan(&u.TgID, &u.FirstName, &u.IsVirtual, &u.CreatedAt)
+	err := r.DB.QueryRow(ctx, query, iID).Scan(&u.TgID, &u.Username, &u.FirstName, &u.IsVirtual, &u.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

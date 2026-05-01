@@ -77,7 +77,12 @@ func (h *BotHandler) MyFundMenu(c tele.Context, offset int) *tele.ReplyMarkup {
 	ctx := context.Background()
 	menu := tele.ReplyMarkup{ResizeKeyboard: true}
 	limit := 5
-	fundsMembers, err := h.fundUC.GetByUserID(ctx, c.Sender().ID, limit, offset)
+	userCtx, save, err := h.getUserCtxH(c, ctx)
+	if err != nil {
+		return &menu
+	}
+	defer save()
+	fundsMembers, err := h.fundUC.GetByUserID(ctx, userCtx.InternalID, limit, offset)
 	if err != nil {
 		err := h.error(c, "Failed to get your funds", err.Error(), Edit)
 		if err != nil {

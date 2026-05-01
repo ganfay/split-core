@@ -16,7 +16,6 @@ import (
 func (h *BotHandler) HandleStart(c tele.Context) error {
 	ctx := context.Background()
 	var user domain.User
-	user.TgID = &c.Sender().ID
 	user.Username = c.Sender().Username
 	user.FirstName = c.Sender().FirstName
 	userStates := domain.UserContext{
@@ -24,7 +23,7 @@ func (h *BotHandler) HandleStart(c tele.Context) error {
 		LastMsgID:    c.Message().ID,
 		ActiveFundID: -1,
 	}
-	err := h.statesUC.SaveUserCtx(ctx, user.TgID, &userStates)
+	err := h.statesUC.SaveUserCtx(ctx, &c.Sender().ID, &userStates)
 	if err != nil {
 		return err
 	}
@@ -125,12 +124,12 @@ func (h *BotHandler) OnText(c tele.Context) error {
 		if err != nil {
 			return err
 		}
-		purchase, err := h.fundUC.AddExpense(ctx, userCtx.ActiveFundID, userCtx.InternalID, desc, cost)
+		err = h.fundUC.AddExpense(ctx, userCtx.ActiveFundID, userCtx.InternalID, desc, cost)
 		if err != nil {
 			return h.error(c, err.Error(), err.Error(), Edit)
 		}
 		userCtx.State = domain.StateViewSuccessExp
-		msg := fmt.Sprintf("✅You successfully added a purchase at your fund\n\nAmount💲: %.2f\nDescription📝: %s", purchase.Amount, purchase.Description)
+		msg := fmt.Sprintf("✅You successfully added a purchase at your fund\n\nAmount💲: %.2f\nDescription📝: %s", cost, desc)
 		_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
 		return err
 	case domain.StateWaitFundName:

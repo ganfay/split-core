@@ -20,13 +20,13 @@ func TestSettleUp(t *testing.T) {
 			name: "One paid for three",
 			purchases: []domain.Purchase{
 				{
-					ID: 1, FundID: 1, Payer: domain.User{TgID: 1, Username: "FirstPayer"}, Amount: 300, Description: "First payment description",
+					ID: 1, FundID: 1, Payer: domain.User{ID: 1, Username: "FirstPayer"}, Amount: 300, Description: "First payment description",
 				},
 			},
 			members: []domain.User{
-				{TgID: 1, Username: "FirstUser"},
-				{TgID: 2, Username: "SecondUser"},
-				{TgID: 3, Username: "ThirdUser"},
+				{ID: 1, Username: "FirstUser"},
+				{ID: 2, Username: "SecondUser"},
+				{ID: 3, Username: "ThirdUser"},
 			},
 			expected: &domain.Settlement{
 				TotalAmount: 300,
@@ -45,19 +45,19 @@ func TestSettleUp(t *testing.T) {
 			name: "Equally",
 			purchases: []domain.Purchase{
 				{
-					ID: 1, FundID: 1, Payer: domain.User{TgID: 1, Username: "FirstPayer"}, Amount: 300, Description: "First payment description",
+					ID: 1, FundID: 1, Payer: domain.User{ID: 1, Username: "FirstPayer"}, Amount: 300, Description: "First payment description",
 				},
 				{
-					ID: 2, FundID: 1, Payer: domain.User{TgID: 2, Username: "SecondUser"}, Amount: 300, Description: "Second payment description",
+					ID: 2, FundID: 1, Payer: domain.User{ID: 2, Username: "SecondUser"}, Amount: 300, Description: "Second payment description",
 				},
 				{
-					ID: 3, FundID: 1, Payer: domain.User{TgID: 3, Username: "ThirdUser"}, Amount: 300, Description: "Third payment description",
+					ID: 3, FundID: 1, Payer: domain.User{ID: 3, Username: "ThirdUser"}, Amount: 300, Description: "Third payment description",
 				},
 			},
 			members: []domain.User{
-				{TgID: 1, Username: "FirstUser"},
-				{TgID: 2, Username: "SecondUser"},
-				{TgID: 3, Username: "ThirdUser"},
+				{ID: 1, Username: "FirstUser"},
+				{ID: 2, Username: "SecondUser"},
+				{ID: 3, Username: "ThirdUser"},
 			},
 			expected: &domain.Settlement{
 				TotalAmount: 900,
@@ -69,19 +69,19 @@ func TestSettleUp(t *testing.T) {
 			name: "Complex float precision",
 			purchases: []domain.Purchase{
 				{
-					ID: 1, FundID: 1, Payer: domain.User{TgID: 1, Username: "FirstPayer"}, Amount: 123.52, Description: "First payment description",
+					ID: 1, FundID: 1, Payer: domain.User{ID: 1, Username: "FirstPayer"}, Amount: 123.52, Description: "First payment description",
 				},
 				{
-					ID: 2, FundID: 1, Payer: domain.User{TgID: 2, Username: "SecondUser"}, Amount: 2000, Description: "Second payment description",
+					ID: 2, FundID: 1, Payer: domain.User{ID: 2, Username: "SecondUser"}, Amount: 2000, Description: "Second payment description",
 				},
 				{
-					ID: 3, FundID: 1, Payer: domain.User{TgID: 3, Username: "ThirdUser"}, Amount: 30, Description: "Third payment description",
+					ID: 3, FundID: 1, Payer: domain.User{ID: 3, Username: "ThirdUser"}, Amount: 30, Description: "Third payment description",
 				},
 			},
 			members: []domain.User{
-				{TgID: 1, Username: "FirstUser"},
-				{TgID: 2, Username: "SecondUser"},
-				{TgID: 3, Username: "ThirdUser"},
+				{ID: 1, Username: "FirstUser"},
+				{ID: 2, Username: "SecondUser"},
+				{ID: 3, Username: "ThirdUser"},
 			},
 			expected: &domain.Settlement{
 				TotalAmount: 2153.52,
@@ -100,23 +100,23 @@ func TestSettleUp(t *testing.T) {
 			name: "SomeTest",
 			purchases: []domain.Purchase{
 				{
-					ID: 1, FundID: 1, Payer: domain.User{TgID: 1, Username: "FirstPayer"}, Amount: 123.52, Description: "First payment description",
+					ID: 1, FundID: 1, Payer: domain.User{ID: 1, Username: "FirstPayer"}, Amount: 123.52, Description: "First payment description",
 				},
 				{
-					ID: 2, FundID: 1, Payer: domain.User{TgID: 2, Username: "SecondUser"}, Amount: 2000, Description: "Second payment description",
+					ID: 2, FundID: 1, Payer: domain.User{ID: 2, Username: "SecondUser"}, Amount: 2000, Description: "Second payment description",
 				},
 				{
-					ID: 3, FundID: 1, Payer: domain.User{TgID: 3, Username: "ThirdUser"}, Amount: 30, Description: "Third payment description",
+					ID: 3, FundID: 1, Payer: domain.User{ID: 3, Username: "ThirdUser"}, Amount: 30, Description: "Third payment description",
 				},
 				{
-					ID: 4, FundID: 1, Payer: domain.User{TgID: 4, Username: "ThirdUser"}, Amount: 3000, Description: "Third payment description",
+					ID: 4, FundID: 1, Payer: domain.User{ID: 4, Username: "ThirdUser"}, Amount: 3000, Description: "Third payment description",
 				},
 			},
 			members: []domain.User{
-				{TgID: 1, Username: "FirstUser"},
-				{TgID: 2, Username: "SecondUser"},
-				{TgID: 3, Username: "ThirdUser"},
-				{TgID: 4, Username: "4th user"},
+				{ID: 1, Username: "FirstUser"},
+				{ID: 2, Username: "SecondUser"},
+				{ID: 3, Username: "ThirdUser"},
+				{ID: 4, Username: "4th user"},
 			},
 			expected: &domain.Settlement{TotalAmount: 5153.52, Average: 1288.38, Debts: []domain.Debt{
 				{FromID: 1, ToID: 2, Amount: 711.62},

@@ -156,7 +156,7 @@ func (h *BotHandler) HandleFund(c tele.Context) error {
 	if err != nil {
 		return h.error(c, "Internal Error, failed to get info about this fund, try again later", err.Error(), Edit)
 	}
-	author, err := h.userUC.GetUser(ctx, fund.AuthorID)
+	author, err := h.userUC.GetUserByIID(ctx, userCtx.InternalID)
 	if err != nil {
 		return h.error(c, "Internal Error, try again later", err.Error(), Edit)
 	}
@@ -291,7 +291,7 @@ func (h *BotHandler) HandleSettleUp(c tele.Context) error {
 	} else {
 		usernames := make(map[int64]string)
 		for _, m := range members {
-			usernames[m.TgID] = m.GetDisplayName()
+			usernames[m.ID] = m.GetDisplayName()
 		}
 		for _, debt := range balance.Debts {
 			msg += fmt.Sprintf("🔴%s ➡️➡️ %.2f ➡️➡️ %s", usernames[debt.FromID], debt.Amount, usernames[debt.ToID])

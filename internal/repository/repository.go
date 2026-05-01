@@ -19,13 +19,13 @@ type FundRepository interface {
 	GetMembers(ctx context.Context, fundID int) ([]domain.User, error)
 
 	AddMember(ctx context.Context, fund *domain.Fund, userID int64) error
-	IsMember(ctx context.Context, fundID int, userID int64) (bool, error)
+	IsMember(ctx context.Context, fundID int, IID int64) (bool, error)
 }
 
 type PurchaseRepository interface {
 	GetPurchasesByFundPagination(ctx context.Context, fundID int, limit int, offset int) ([]domain.Purchase, error)
 	GetPurchasesByFundAll(ctx context.Context, fundID int) ([]domain.Purchase, error)
-	CreatePurchase(ctx context.Context, purchase *domain.Purchase) error
+	CreatePurchase(ctx context.Context, fundID int, amount float64, IID int64, desc string) error
 }
 
 type RedisRepository interface {

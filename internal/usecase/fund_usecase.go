@@ -40,20 +40,20 @@ func calculateSettlements(purchases []domain.Purchase, members []domain.User) *d
 	m := make(map[int64]float64)
 	for _, purchase := range purchases {
 		totalAmount += purchase.Amount
-		m[purchase.Payer.TgID] += purchase.Amount
+		m[purchase.Payer.ID] += purchase.Amount
 	}
 
 	averageAmount := totalAmount / float64(len(members))
 	var creditors []int64
 	var debtors []int64
 	for _, member := range members {
-		m[member.TgID] = m[member.TgID] - averageAmount
+		m[member.ID] = m[member.ID] - averageAmount
 
-		bal := m[member.TgID]
+		bal := m[member.ID]
 		if bal > 0.01 {
-			creditors = append(creditors, member.TgID)
+			creditors = append(creditors, member.ID)
 		} else if bal < -0.01 {
-			debtors = append(debtors, member.TgID)
+			debtors = append(debtors, member.ID)
 		}
 	}
 	var debts []domain.Debt
@@ -89,31 +89,23 @@ func calculateSettlements(purchases []domain.Purchase, members []domain.User) *d
 	return settlement
 }
 
-func (u *FundUsecase) AddExpense(ctx context.Context, fundID int, id int64, desc string, cost float64) (*domain.Purchase, error) {
+func (u *FundUsecase) AddExpense(ctx context.Context, fundID int, id int64, desc string, cost float64) error {
 	isMember, err := u.fundRepository.IsMember(ctx, fundID, id)
 	if err != nil || !isMember {
-		return nil, err
+		return err
 	}
 	if cost <= 0 {
-		return nil, errors.New("invalid amount")
+		return errors.New("invalid amount")
 	}
 	if len(desc) > 200 {
 		desc = desc[:197] + "..."
 	}
-	user := domain.User{
-		ID: id,
-	}
-	purchase := &domain.Purchase{
-		FundID:      fundID,
-		Payer:       user,
-		Amount:      cost,
-		Description: desc,
-	}
-	err = u.purchaseRepository.CreatePurchase(ctx, purchase)
+
+	err = u.purchaseRepository.CreatePurchase(ctx, fundID, cost, id, desc)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return purchase, nil
+	return nil
 }
 
 func (u *FundUsecase) CreateFund(ctx context.Context, fund *domain.Fund) (*domain.Fund, error) {
@@ -144,8 +136,8 @@ func (u *FundUsecase) GetPurchasesByFundPagination(ctx context.Context, fundID i
 	return u.purchaseRepository.GetPurchasesByFundPagination(ctx, fundID, limit, offset)
 }
 
-func (u *FundUsecase) CreatePurchase(ctx context.Context, purchase *domain.Purchase) error {
-	return u.purchaseRepository.CreatePurchase(ctx, purchase)
+func (u *FundUsecase) CreatePurchase(ctx context.Context, fundID int, amount float64, IID int64, desc string) error {
+	return u.purchaseRepository.CreatePurchase(ctx, fundID, amount, IID, desc)
 }
 
 func (u *FundUsecase) GetMembers(ctx context.Context, fundID int) ([]domain.User, error) {
