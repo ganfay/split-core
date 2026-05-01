@@ -326,12 +326,20 @@ func (h *BotHandler) HandleMembers(c tele.Context) error {
 }
 
 func (h *BotHandler) getUserCtxH(c tele.Context, ctx context.Context) (*domain.UserContext, func(), error) {
-	id := c.Sender().ID
+	id := &c.Sender().ID
 
 	userCtx, err := h.statesUC.GetUserCtx(ctx, id)
 	if err != nil {
 		_ = h.error(c, "Internal error try again later", err.Error(), Edit)
 		return nil, nil, err
+	}
+
+	if userCtx.InternalID == 0 {
+		internalID, err := h.userUC.GetOrCreateRealUser(ctx, id, c.Sender().Username, c.Sender().FirstName)
+		if err != nil {
+			_ = h.error(c, "Internal error try again later", err.Error(), Edit)
+		}
+		userCtx.InternalID = internalID
 	}
 
 	saveFunc := func() {

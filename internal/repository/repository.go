@@ -7,9 +7,9 @@ import (
 )
 
 type UserRepository interface {
-	CreateRealUser(ctx context.Context, tgID int64, username, firstName string) (int64, error)
-	GetUser(ctx context.Context, id int64) (*domain.User, error)
+	GetOrCreateRealUser(ctx context.Context, tgID *int64, username, firstName string) (int64, error)
 	CreateVirtualUser(ctx context.Context, firstName string) (int64, error)
+	GetUserByIID(ctx context.Context, iID int64) (*domain.User, error)
 }
 
 type FundRepository interface {
@@ -29,6 +29,6 @@ type PurchaseRepository interface {
 }
 
 type RedisRepository interface {
-	GetUserCtx(ctx context.Context, userID int64) (*domain.UserContext, error)
-	SaveUserCtx(ctx context.Context, userID int64, value *domain.UserContext) error
+	GetUserCtx(ctx context.Context, userID *int64) (*domain.UserContext, error)
+	SaveUserCtx(ctx context.Context, userID *int64, value *domain.UserContext) error
 }

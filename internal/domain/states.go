@@ -6,6 +6,7 @@ type UserContext struct {
 	State        State `json:"state"`
 	LastMsgID    int   `json:"last_msg_id"`
 	ActiveFundID int   `json:"active_fund_id"`
+	InternalID   int64 `json:"internal_id"`
 }
 
 const (

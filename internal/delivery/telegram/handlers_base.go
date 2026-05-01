@@ -16,23 +16,25 @@ import (
 func (h *BotHandler) HandleStart(c tele.Context) error {
 	ctx := context.Background()
 	var user domain.User
-	user.TgID = c.Sender().ID
+	user.TgID = &c.Sender().ID
 	user.Username = c.Sender().Username
 	user.FirstName = c.Sender().FirstName
-	userCtx := domain.UserContext{
+	userStates := domain.UserContext{
 		State:        domain.StateNone,
 		LastMsgID:    c.Message().ID,
 		ActiveFundID: -1,
 	}
-	err := h.statesUC.SaveUserCtx(ctx, user.TgID, &userCtx)
+	err := h.statesUC.SaveUserCtx(ctx, user.TgID, &userStates)
 	if err != nil {
 		return err
 	}
 
-	_, err = h.userUC.CreateUser(ctx, &user)
+	userCtx, save, err := h.getUserCtxH(c, ctx)
 	if err != nil {
-		slog.Warn("could not register user", "err", err, "id", user.TgID)
+		return err
 	}
+	defer save()
+
 	args := c.Args()
 
 	// if url invite code
@@ -49,7 +51,7 @@ func (h *BotHandler) HandleStart(c tele.Context) error {
 			return h.error(c, "Invite code not found", err.Error(), Reply)
 		}
 
-		err = h.fundUC.AddMember(ctx, fund, user.TgID)
+		err = h.fundUC.AddMember(ctx, fund, userCtx.InternalID)
 		if err != nil {
 			return h.error(c, "Failed to join the fund", err.Error(), Reply)
 		}
@@ -72,20 +74,12 @@ func (h *BotHandler) HandleBack(c tele.Context) error {
 			slog.Error("Error while handling back", "err", err.Error())
 		}
 	}(c)
-	id := c.Sender().ID
 	ctx := context.Background()
-	userCtx, err := h.statesUC.GetUserCtx(ctx, id)
+	userCtx, save, err := h.getUserCtxH(c, ctx)
 	if err != nil {
 		return h.error(c, "Failed to get user context", err.Error(), Edit)
 	}
-
-	defer func() {
-		err := h.statesUC.SaveUserCtx(ctx, id, userCtx)
-		if err != nil {
-			slog.Error("Failed to save user context", "err", err.Error())
-			return
-		}
-	}()
+	defer save()
 
 	slog.Debug("Handling back", "state", userCtx.State)
 
@@ -111,31 +105,27 @@ func (h *BotHandler) HandleBack(c tele.Context) error {
 }
 
 func (h *BotHandler) OnText(c tele.Context) error {
-	id := c.Sender().ID
 	if err := c.Delete(); err != nil {
-		slog.Error("error delete message", "id", id, "err", err.Error())
+		slog.Error("error delete message", "tg_id", c.Sender().ID, "err", err.Error())
 		return err
 	}
 	ctx := context.Background()
 
-	userCtx, err := h.statesUC.GetUserCtx(ctx, c.Sender().ID)
+	userCtx, save, err := h.getUserCtxH(c, ctx)
 	if err != nil {
 		return h.error(c, "Failed to get user context", err.Error(), Edit)
 	}
-
-	defer func() {
-		err = h.statesUC.SaveUserCtx(ctx, c.Sender().ID, userCtx)
-		if err != nil {
-			slog.Error("Failed to save user context", "err", err.Error())
-			return
-		}
-	}()
+	defer save()
 
 	text := c.Text()
 	switch userCtx.State {
 	case domain.StateWaitExpense:
 		storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
-		purchase, err := h.fundUC.AddExpense(ctx, userCtx.ActiveFundID)
+		cost, desc, err := utils.ParsePurchase(c.Text())
+		if err != nil {
+			return err
+		}
+		purchase, err := h.fundUC.AddExpense(ctx, userCtx.ActiveFundID, userCtx.InternalID, desc, cost)
 		if err != nil {
 			return h.error(c, err.Error(), err.Error(), Edit)
 		}
@@ -148,7 +138,7 @@ func (h *BotHandler) OnText(c tele.Context) error {
 		botName := os.Getenv("BOT_NAME")
 		InviteCodeInviteURL := utils.GenerateInviteCodeURL(InviteCode, botName)
 		fund := domain.Fund{
-			AuthorID:   id,
+			AuthorID:   userCtx.InternalID,
 			Name:       text,
 			InviteCode: InviteCode,
 		}
@@ -158,7 +148,7 @@ func (h *BotHandler) OnText(c tele.Context) error {
 		}
 		slog.Info("Setting up fund",
 			slog.Int("FundID", fund.ID),
-			slog.Int64("AuthorID", id),
+			slog.Int64("AuthorID", userCtx.InternalID),
 			slog.String("Name", fund.Name),
 			slog.String("ICode", fund.InviteCode),
 		)
@@ -179,12 +169,12 @@ func (h *BotHandler) OnText(c tele.Context) error {
 			return h.error(c, "Failed to get fund", err.Error(), Edit)
 		}
 
-		err = h.fundUC.AddMember(ctx, fund, id)
+		err = h.fundUC.AddMember(ctx, fund, userCtx.InternalID)
 		if err != nil {
 			if strings.Contains(err.Error(), "SQLSTATE 23505") {
 				storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
 				msg := "You already <b>exist</b> in this fund✅"
-				slog.Info("User already exist in fund", "user_id", id, "fund_id", fund.ID)
+				slog.Info("User already exist in fund", "user_id", userCtx.InternalID, "fund_id", fund.ID)
 				_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
 				return err
 			}
@@ -199,13 +189,13 @@ func (h *BotHandler) OnText(c tele.Context) error {
 			return h.error(c, "Failed to edit fund", err.Error(), Edit)
 		}
 		userCtx.LastMsgID = ctxMsg.ID
-		slog.Info("Setting up fund join code", "id", id)
+		slog.Info("Setting up fund join code", "id", userCtx.InternalID)
 	case domain.StateNone, domain.StateViewHistory, domain.StateFundMenu, domain.StateViewFund, domain.StateViewSettleUp, domain.StateViewMembers, domain.StateViewSuccessExp:
 		storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
 		msg := "No answer"
 		_, err := c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
 		if err != nil {
-			slog.Error("error to edit message", "id", id, "err", err.Error())
+			slog.Error("error to edit message", "id", userCtx.InternalID, "err", err.Error())
 			return err
 		}
 
@@ -217,7 +207,7 @@ func (h *BotHandler) OnText(c tele.Context) error {
 }
 
 func (h *BotHandler) error(c tele.Context, userMsg string, techMsg string, mode SendMode) error {
-	slog.Error("Technical error", "msg", techMsg, "user_id", c.Sender().ID)
+	slog.Error("Technical error", "msg", techMsg, "tg_id", c.Sender().ID)
 
 	displayMsg := "⚠️ <b>Oops! Something went wrong</b>\n\n" + userMsg
 
@@ -225,12 +215,12 @@ func (h *BotHandler) error(c tele.Context, userMsg string, techMsg string, mode 
 		_ = c.Respond()
 	}
 	ctx := context.Background()
-	userCtx, err := h.statesUC.GetUserCtx(ctx, c.Sender().ID)
+	userCtx, err := h.statesUC.GetUserCtx(ctx, &c.Sender().ID)
 	if err != nil {
 		return fmt.Errorf("error getting user context: %s", err.Error())
 	}
 	defer func() {
-		err := h.statesUC.SaveUserCtx(ctx, c.Sender().ID, userCtx)
+		err := h.statesUC.SaveUserCtx(ctx, &c.Sender().ID, userCtx)
 		if err != nil {
 			slog.Error("error saving user context", "user_id", c.Sender().ID, "err", err.Error())
 			return

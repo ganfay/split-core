@@ -20,7 +20,7 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{DB: db}
 }
 
-func (r *UserRepository) CreateRealUser(ctx context.Context, tgID int64, username, firstName string) (int64, error) {
+func (r *UserRepository) GetOrCreateRealUser(ctx context.Context, tgID *int64, username, firstName string) (int64, error) {
 	var id int64
 	query := `
 	INSERT INTO app.users (tg_id, username, first_name, is_virtual) 
@@ -52,10 +52,11 @@ func (r *UserRepository) CreateVirtualUser(ctx context.Context, firstName string
 	return id, nil
 }
 
-func (r *UserRepository) GetUser(ctx context.Context, id int64) (*domain.User, error) {
+func (r *UserRepository) GetUserByIID(ctx context.Context, iID int64) (*domain.User, error) {
 	var u domain.User
-	u.ID = id
-	err := r.DB.QueryRow(ctx, `SELECT tg_id, username, first_name, created_at, is_virtual FROM app.users WHERE id = $1`, u.ID).Scan(&u.TgID, &u.Username, &u.FirstName, &u.CreatedAt, &u.IsVirtual)
+	query := `
+SELECT tg_id, username, first_name, is_virtual, created_at FROM app.users WHERE id = $1`
+	err := r.DB.QueryRow(ctx, query, iID).Scan(&u.TgID, &u.FirstName, &u.IsVirtual, &u.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

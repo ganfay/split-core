@@ -7,7 +7,6 @@ import (
 	"math"
 
 	"github.com/ganfay/split-core/internal/domain"
-	"github.com/ganfay/split-core/internal/pkg/utils"
 	"github.com/ganfay/split-core/internal/repository"
 )
 
@@ -90,13 +89,9 @@ func calculateSettlements(purchases []domain.Purchase, members []domain.User) *d
 	return settlement
 }
 
-func (u *FundUsecase) AddExpense(ctx context.Context, fundID int, id int64, text string) (*domain.Purchase, error) {
+func (u *FundUsecase) AddExpense(ctx context.Context, fundID int, id int64, desc string, cost float64) (*domain.Purchase, error) {
 	isMember, err := u.fundRepository.IsMember(ctx, fundID, id)
 	if err != nil || !isMember {
-		return nil, err
-	}
-	cost, desc, err := utils.ParsePurchase(text)
-	if err != nil {
 		return nil, err
 	}
 	if cost <= 0 {
