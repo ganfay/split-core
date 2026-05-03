@@ -213,8 +213,9 @@ func (h *BotHandler) OnText(c tele.Context) error {
 		if err != nil {
 			return h.error(c, "Failed to create user", err.Error(), Edit)
 		}
-		err = h.fundUC.AddMember(ctx, userCtx.ActiveFundID, userCtx.InternalID)
+		err = h.fundUC.AddMember(ctx, userCtx.ActiveFundID, IID)
 		if err != nil {
+			slog.Debug("ADD MEMBER METHOD ERR", "err", err, "user_id", userCtx.ActiveFundID, "fund_id", userCtx.ActiveFundID)
 			return h.error(c, "Failed to add fund", err.Error(), Edit)
 		}
 		userCtx.State = domain.StateSuccessAVU

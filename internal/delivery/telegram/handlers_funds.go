@@ -280,7 +280,7 @@ func (h *BotHandler) HandleSettleUp(c tele.Context) error {
 	}
 	msg := fmt.Sprintf("⚖️ <b>Settlement for «%s»</b>\n\n", fund.Name)
 	msg += fmt.Sprintf("💵 <b>Total Spent:</b> %.2f\n", balance.TotalAmount)
-	msg += fmt.Sprintf("🎯 <b>Average per person:</b> %.2f\n\n", balance.Average)
+	msg += fmt.Sprintf("🎯 <b>Average per person:</b> %.2f\n\n\n", balance.Average)
 	members, err := h.fundUC.GetMembers(ctx, userCtx.ActiveFundID)
 	if err != nil {
 		return err
@@ -294,7 +294,7 @@ func (h *BotHandler) HandleSettleUp(c tele.Context) error {
 			usernames[m.ID] = m.GetDisplayName()
 		}
 		for _, debt := range balance.Debts {
-			msg += fmt.Sprintf("🔴%s ➡️➡️ %.2f ➡️➡️ %s", usernames[debt.FromID], debt.Amount, usernames[debt.ToID])
+			msg += fmt.Sprintf("<b>🔴%s ➡️➡️ %.2f ➡️➡️ %s\n\n</b>", usernames[debt.FromID], debt.Amount, usernames[debt.ToID])
 		}
 	}
 
