@@ -66,3 +66,9 @@ build:
 run-services:
 	@mkdir -p "out/logs"
 	@docker compose up -d --build
+
+dev-rerun:
+	@make env-cleanup
+	@make env-up
+	sleep 2
+	@make migrate-up

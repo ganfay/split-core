@@ -32,7 +32,7 @@ func (r *FundRepository) CreateFund(ctx context.Context, fund *domain.Fund) (*do
 			slog.Error("Failed to rollback transaction", slog.Any("err", err))
 		}
 	}()
-	
+
 	err = r.DB.QueryRow(ctx, `INSERT INTO app.funds
     (name, author_id, invite_code) 
 	VALUES ($1, $2, $3) 
@@ -96,9 +96,9 @@ func (r *FundRepository) GetByUserID(ctx context.Context, userID int64, limit in
 	return funds, nil
 }
 
-func (r *FundRepository) AddMember(ctx context.Context, fund *domain.Fund, userID int64) error {
+func (r *FundRepository) AddMember(ctx context.Context, fundID int, userID int64) error {
 	queryMember := `INSERT INTO app.fund_members (fund_id, user_id) VALUES ($1, $2)`
-	_, err := r.DB.Exec(ctx, queryMember, fund.ID, userID)
+	_, err := r.DB.Exec(ctx, queryMember, fundID, userID)
 	return err
 }
 
@@ -116,9 +116,9 @@ func (r *FundRepository) IsMember(ctx context.Context, fundID int, userID int64)
 func (r *FundRepository) GetMembers(ctx context.Context, fundID int) ([]domain.User, error) {
 	var users []domain.User
 
-	query := `SELECT f.user_id, u.username, first_name 
+	query := `SELECT f.user_id, COALESCE(u.tg_id, -1), COALESCE(u.username, ''), first_name 
 				FROM app.fund_members f
-				JOIN app.users u ON f.user_id = u.tg_id
+				JOIN app.users u ON f.user_id = u.id
 				WHERE fund_id = $1`
 
 	rows, err := r.DB.Query(ctx, query, fundID)
@@ -128,11 +128,41 @@ func (r *FundRepository) GetMembers(ctx context.Context, fundID int) ([]domain.U
 	defer rows.Close()
 	for rows.Next() {
 		var user domain.User
-		err = rows.Scan(&user.TgID, &user.Username, &user.FirstName)
+		err = rows.Scan(&user.ID, &user.TgID, &user.Username, &user.FirstName)
 		if err != nil {
 			return nil, err
 		}
 		users = append(users, user)
 	}
 	return users, nil
+}
+
+func (r *FundRepository) GetVirtualUsers(ctx context.Context, fundID int, offset, limit int) ([]domain.User, error) {
+	var users []domain.User
+	query := `SELECT fm.user_id, u.first_name
+FROM app.fund_members fm 
+JOIN app.users u ON fm.user_id = u.id
+WHERE fm.fund_id = $1 AND u.is_virtual = true
+LIMIT $2 OFFSET $3`
+	rows, err := r.DB.Query(ctx, query, fundID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var user domain.User
+		err = rows.Scan(&user.ID, &user.FirstName)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+func (r *FundRepository) RemoveUser(ctx context.Context, fundID int, userID int64) error {
+	query := `DELETE FROM app.fund_members
+WHERE fund_id = $1 AND user_id = $2`
+	_, err := r.DB.Exec(ctx, query, fundID, userID)
+	return err
 }

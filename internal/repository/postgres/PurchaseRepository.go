@@ -20,9 +20,9 @@ func NewPurchaseRepository(pool *pgxpool.Pool) *PurchaseRepository {
 
 func (r *PurchaseRepository) GetPurchasesByFundPagination(ctx context.Context, fundID int, limit int, offset int) ([]domain.Purchase, error) {
 	query := `
-SELECT p.id, p.fund_id, p.payer_id, u.username, u.first_name, p.amount, p.description, p.created_at
+SELECT p.id, p.fund_id, p.payer_id, u.tg_id, u.username, u.first_name, p.amount, p.description, p.created_at
 FROM app.purchases p 
-JOIN app.users u ON p.payer_id = u.tg_id
+JOIN app.users u ON p.payer_id = u.id
 WHERE p.fund_id = $1
 ORDER BY created_at DESC
 OFFSET $2 LIMIT $3
@@ -34,7 +34,7 @@ OFFSET $2 LIMIT $3
 	var funds []domain.Purchase
 	for rows.Next() {
 		var tempPurchase domain.Purchase
-		err = rows.Scan(&tempPurchase.ID, &tempPurchase.FundID, &tempPurchase.Payer.TgID, &tempPurchase.Payer.Username, &tempPurchase.Payer.FirstName, &tempPurchase.Amount, &tempPurchase.Description, &tempPurchase.CreatedAt)
+		err = rows.Scan(&tempPurchase.ID, &tempPurchase.FundID, &tempPurchase.Payer.ID, &tempPurchase.Payer.TgID, &tempPurchase.Payer.Username, &tempPurchase.Payer.FirstName, &tempPurchase.Amount, &tempPurchase.Description, &tempPurchase.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -45,9 +45,9 @@ OFFSET $2 LIMIT $3
 
 func (r *PurchaseRepository) GetPurchasesByFundAll(ctx context.Context, fundID int) ([]domain.Purchase, error) {
 	query := `
-SELECT p.id, p.fund_id, p.payer_id, u.username, u.first_name, p.amount, p.description, p.created_at
+SELECT p.id, p.fund_id, p.payer_id, u.tg_id, u.username, u.first_name, p.amount, p.description, p.created_at
 FROM app.purchases p 
-JOIN app.users u ON p.payer_id = u.tg_id
+JOIN app.users u ON p.payer_id = u.id
 WHERE p.fund_id = $1
 ORDER BY created_at DESC
 `
@@ -58,7 +58,7 @@ ORDER BY created_at DESC
 	var funds []domain.Purchase
 	for rows.Next() {
 		var tempPurchase domain.Purchase
-		err = rows.Scan(&tempPurchase.ID, &tempPurchase.FundID, &tempPurchase.Payer.TgID, &tempPurchase.Payer.Username, &tempPurchase.Payer.FirstName, &tempPurchase.Amount, &tempPurchase.Description, &tempPurchase.CreatedAt)
+		err = rows.Scan(&tempPurchase.ID, &tempPurchase.FundID, &tempPurchase.Payer.ID, &tempPurchase.Payer.TgID, &tempPurchase.Payer.Username, &tempPurchase.Payer.FirstName, &tempPurchase.Amount, &tempPurchase.Description, &tempPurchase.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -67,11 +67,11 @@ ORDER BY created_at DESC
 	return funds, nil
 }
 
-func (r *PurchaseRepository) CreatePurchase(ctx context.Context, purchase *domain.Purchase) error {
+func (r *PurchaseRepository) CreatePurchase(ctx context.Context, fundID int, amount float64, IID int64, desc string) error {
 	query := `INSERT INTO app.purchases
 (fund_id, payer_id, amount, description) 
 VALUES ($1, $2, $3, $4)
 `
-	_, err := r.DB.Exec(ctx, query, purchase.FundID, purchase.Payer.TgID, purchase.Amount, purchase.Description)
+	_, err := r.DB.Exec(ctx, query, fundID, IID, amount, desc)
 	return err
 }

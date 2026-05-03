@@ -156,7 +156,7 @@ func (h *BotHandler) HandleFund(c tele.Context) error {
 	if err != nil {
 		return h.error(c, "Internal Error, failed to get info about this fund, try again later", err.Error(), Edit)
 	}
-	author, err := h.userUC.GetUser(ctx, fund.AuthorID)
+	author, err := h.userUC.GetUserByIID(ctx, userCtx.InternalID)
 	if err != nil {
 		return h.error(c, "Internal Error, try again later", err.Error(), Edit)
 	}
@@ -280,7 +280,7 @@ func (h *BotHandler) HandleSettleUp(c tele.Context) error {
 	}
 	msg := fmt.Sprintf("⚖️ <b>Settlement for «%s»</b>\n\n", fund.Name)
 	msg += fmt.Sprintf("💵 <b>Total Spent:</b> %.2f\n", balance.TotalAmount)
-	msg += fmt.Sprintf("🎯 <b>Average per person:</b> %.2f\n\n", balance.Average)
+	msg += fmt.Sprintf("🎯 <b>Average per person:</b> %.2f\n\n\n", balance.Average)
 	members, err := h.fundUC.GetMembers(ctx, userCtx.ActiveFundID)
 	if err != nil {
 		return err
@@ -291,10 +291,10 @@ func (h *BotHandler) HandleSettleUp(c tele.Context) error {
 	} else {
 		usernames := make(map[int64]string)
 		for _, m := range members {
-			usernames[m.TgID] = m.GetDisplayName()
+			usernames[m.ID] = m.GetDisplayName()
 		}
 		for _, debt := range balance.Debts {
-			msg += fmt.Sprintf("🔴%s ➡️➡️ %.2f ➡️➡️ %s", usernames[debt.FromID], debt.Amount, usernames[debt.ToID])
+			msg += fmt.Sprintf("<b>🔴%s ➡️➡️ %.2f ➡️➡️ %s\n\n</b>", usernames[debt.FromID], debt.Amount, usernames[debt.ToID])
 		}
 	}
 
@@ -308,7 +308,6 @@ func (h *BotHandler) HandleMembers(c tele.Context) error {
 		return h.error(c, "Internal error try again later", err.Error(), Edit)
 	}
 	defer saveCtx()
-	userCtx.LastMsgID = c.Message().ID
 	userCtx.State = domain.StateViewMembers
 	members, err := h.fundUC.GetMembers(context.Background(), userCtx.ActiveFundID)
 	if err != nil {
@@ -321,17 +320,26 @@ func (h *BotHandler) HandleMembers(c tele.Context) error {
 		name += " (" + m.GetDisplayName() + ")"
 		msg += fmt.Sprintf("%d. %s\n", i+1, name)
 	}
-
-	return c.Edit(msg, h.BackMenu(), tele.ModeHTML)
+	storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
+	_, err = c.Bot().Edit(storedMsg, msg, h.MenuMembersView(), tele.ModeHTML)
+	return err
 }
 
 func (h *BotHandler) getUserCtxH(c tele.Context, ctx context.Context) (*domain.UserContext, func(), error) {
-	id := c.Sender().ID
+	id := &c.Sender().ID
 
 	userCtx, err := h.statesUC.GetUserCtx(ctx, id)
 	if err != nil {
 		_ = h.error(c, "Internal error try again later", err.Error(), Edit)
 		return nil, nil, err
+	}
+
+	if userCtx.InternalID == 0 {
+		internalID, err := h.userUC.GetOrCreateRealUser(ctx, id, c.Sender().Username, c.Sender().FirstName)
+		if err != nil {
+			_ = h.error(c, "Internal error try again later", err.Error(), Edit)
+		}
+		userCtx.InternalID = internalID
 	}
 
 	saveFunc := func() {
@@ -341,4 +349,83 @@ func (h *BotHandler) getUserCtxH(c tele.Context, ctx context.Context) (*domain.U
 	}
 
 	return userCtx, saveFunc, nil
+}
+
+func (h *BotHandler) HandleWaitAddUser(c tele.Context) error {
+	ctx := context.Background()
+	userCtx, saveFunc, err := h.getUserCtxH(c, ctx)
+	if err != nil {
+		return h.error(c, "Internal error try again later", err.Error(), Edit)
+	}
+	defer saveFunc()
+	userCtx.LastMsgID = c.Message().ID
+	userCtx.State = domain.StateWaitUsername
+	msg := "<b>Enter the name of the new fund participant</b> ✍️\n\n<i>It will be added as a virtual user (not linked to Telegram).</i>"
+	storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
+	_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
+	return err
+}
+
+func (h *BotHandler) HandleWaitRemoveUser(c tele.Context) error {
+	ctx := context.Background()
+	offset := c.Data()
+	intOffset, err := strconv.Atoi(offset)
+	if err != nil {
+		intOffset = 0
+		slog.Warn("Failed to parse offset", "offset", offset)
+	}
+	userCtx, saveFunc, err := h.getUserCtxH(c, ctx)
+	if err != nil {
+		return h.error(c, "Internal error try again later", err.Error(), Edit)
+	}
+	defer saveFunc()
+	userCtx.LastMsgID = c.Message().ID
+	userCtx.State = domain.StateWaitToRemove
+	limit := 7
+	users, err := h.fundUC.GetVirtualUsers(ctx, userCtx.ActiveFundID, intOffset, limit)
+	if err != nil {
+		return h.error(c, "Internal error try again later", err.Error(), Edit)
+	}
+	msg := "<b>Select the virtual user you want to delete</b>"
+	if len(users) == 0 {
+		msg += "\n\n<b>No virtual users found🫢</b>"
+	}
+	storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
+	_, err = c.Bot().Edit(storedMsg, msg, h.MenuRemoveVUsers(intOffset, users), tele.ModeHTML)
+	return err
+}
+
+func (h *BotHandler) HandleRemoveVUser(c tele.Context) error {
+	ctx := context.Background()
+	IIDtoDelete, err := strconv.ParseInt(c.Data(), 10, 64)
+	if err != nil {
+		return c.Respond(&tele.CallbackResponse{
+			Text:      "❌ Error: invalid IID user",
+			ShowAlert: true,
+		})
+	}
+	userCtx, saveFunc, err := h.getUserCtxH(c, ctx)
+	if err != nil {
+		return h.error(c, "Internal error try again later", err.Error(), Edit)
+	}
+	defer saveFunc()
+
+	err = h.fundUC.RemoveUser(ctx, userCtx.ActiveFundID, IIDtoDelete)
+	if err != nil {
+		return h.error(c, "Internal error try again later", err.Error(), Edit)
+	}
+
+	err = h.userUC.DeleteUser(ctx, IIDtoDelete)
+	if err != nil {
+		return h.error(c, "Internal error try again later", err.Error(), Edit)
+	}
+
+	userCtx.State = domain.StateRemovedSuccess
+
+	msg := "🗑 <b>Member successfully removed!</b>\n\n" +
+		"<i>They are no longer part of the fund, and their expense history has been cleared.</i>"
+
+	storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
+	_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
+	return err
 }

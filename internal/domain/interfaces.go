@@ -2,31 +2,32 @@ package domain
 
 import (
 	"context"
-
-	tele "gopkg.in/telebot.v4"
 )
 
 type FundUsecase interface {
 	GetBalance(ctx context.Context, fundID int) (*Settlement, error)
-	AddExpense(ctx context.Context, c tele.Context, fundID int) (*Purchase, error)
+	AddExpense(ctx context.Context, fundID int, id int64, desc string, cost float64) error
 
 	CreateFund(ctx context.Context, fund *Fund) (*Fund, error)
 	GetInfo(ctx context.Context, reqFund *Fund) (*Fund, error)
-	GetByUserID(ctx context.Context, userID int64, limit int, offset int) ([]Fund, error)
-	AddMember(ctx context.Context, fund *Fund, userID int64) error
-	IsMember(ctx context.Context, fundID int, userID int64) (bool, error)
+	GetByUserID(ctx context.Context, IID int64, limit int, offset int) ([]Fund, error)
+	AddMember(ctx context.Context, fundID int, IID int64) error
+	IsMember(ctx context.Context, fundID int, IID int64) (bool, error)
 	GetMembers(ctx context.Context, fundID int) ([]User, error)
-
+	GetVirtualUsers(ctx context.Context, fundID int, offset, limit int) ([]User, error)
+	RemoveUser(ctx context.Context, fundID int, userID int64) error
 	GetPurchasesByFundPagination(ctx context.Context, fundID int, limit int, offset int) ([]Purchase, error)
-	CreatePurchase(ctx context.Context, purchase *Purchase) error
+	CreatePurchase(ctx context.Context, fundID int, amount float64, IID int64, desc string) error
 }
 
 type UserUsecase interface {
-	CreateUser(ctx context.Context, u *User) (*User, error)
-	GetUser(ctx context.Context, tgID int64) (*User, error)
+	GetOrCreateRealUser(ctx context.Context, tgID *int64, username string, firstName string) (int64, error)
+	CreateVirtualUser(ctx context.Context, firstName string) (int64, error)
+	GetUserByIID(ctx context.Context, iID int64) (*User, error)
+	DeleteUser(ctx context.Context, iID int64) error
 }
 
 type StatesUsecase interface {
-	GetUserCtx(ctx context.Context, userID int64) (*UserContext, error)
-	SaveUserCtx(ctx context.Context, userID int64, value *UserContext) error
+	GetUserCtx(ctx context.Context, tgID *int64) (*UserContext, error)
+	SaveUserCtx(ctx context.Context, tgID *int64, value *UserContext) error
 }

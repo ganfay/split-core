@@ -19,8 +19,8 @@ func NewRepository(rdb *redis.Client) *Repository {
 	return &Repository{rdb: rdb}
 }
 
-func (r *Repository) SaveUserCtx(ctx context.Context, userID int64, value *domain.UserContext) error {
-	key := fmt.Sprintf("user:%d", userID)
+func (r *Repository) SaveUserCtx(ctx context.Context, tgID *int64, value *domain.UserContext) error {
+	key := fmt.Sprintf("user:%d", *tgID)
 	data, err := utils.EncodeJSON[domain.UserContext](*value)
 	if err != nil {
 		return err
@@ -28,8 +28,8 @@ func (r *Repository) SaveUserCtx(ctx context.Context, userID int64, value *domai
 	return r.rdb.Set(ctx, key, data, 24*time.Hour).Err()
 }
 
-func (r *Repository) GetUserCtx(ctx context.Context, userID int64) (*domain.UserContext, error) {
-	key := fmt.Sprintf("user:%d", userID)
+func (r *Repository) GetUserCtx(ctx context.Context, tgID *int64) (*domain.UserContext, error) {
+	key := fmt.Sprintf("user:%d", *tgID)
 	data, err := r.rdb.Get(ctx, key).Bytes()
 	if err != nil {
 		return &domain.UserContext{}, err

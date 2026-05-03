@@ -7,10 +7,7 @@ import (
 	"math"
 
 	"github.com/ganfay/split-core/internal/domain"
-	"github.com/ganfay/split-core/internal/pkg/utils"
 	"github.com/ganfay/split-core/internal/repository"
-
-	tele "gopkg.in/telebot.v4"
 )
 
 type FundUsecase struct {
@@ -43,20 +40,20 @@ func calculateSettlements(purchases []domain.Purchase, members []domain.User) *d
 	m := make(map[int64]float64)
 	for _, purchase := range purchases {
 		totalAmount += purchase.Amount
-		m[purchase.Payer.TgID] += purchase.Amount
+		m[purchase.Payer.ID] += purchase.Amount
 	}
 
 	averageAmount := totalAmount / float64(len(members))
 	var creditors []int64
 	var debtors []int64
 	for _, member := range members {
-		m[member.TgID] = m[member.TgID] - averageAmount
+		m[member.ID] = m[member.ID] - averageAmount
 
-		bal := m[member.TgID]
+		bal := m[member.ID]
 		if bal > 0.01 {
-			creditors = append(creditors, member.TgID)
+			creditors = append(creditors, member.ID)
 		} else if bal < -0.01 {
-			debtors = append(debtors, member.TgID)
+			debtors = append(debtors, member.ID)
 		}
 	}
 	var debts []domain.Debt
@@ -92,35 +89,23 @@ func calculateSettlements(purchases []domain.Purchase, members []domain.User) *d
 	return settlement
 }
 
-func (u *FundUsecase) AddExpense(ctx context.Context, ctxInfoAboutPurchase tele.Context, fundID int) (*domain.Purchase, error) {
-	isMember, err := u.fundRepository.IsMember(ctx, fundID, ctxInfoAboutPurchase.Sender().ID)
+func (u *FundUsecase) AddExpense(ctx context.Context, fundID int, id int64, desc string, cost float64) error {
+	isMember, err := u.fundRepository.IsMember(ctx, fundID, id)
 	if err != nil || !isMember {
-		return nil, err
-	}
-	cost, desc, err := utils.ParsePurchase(ctxInfoAboutPurchase.Text())
-	if err != nil {
-		return nil, err
+		return err
 	}
 	if cost <= 0 {
-		return nil, errors.New("invalid amount")
+		return errors.New("invalid amount")
 	}
 	if len(desc) > 200 {
 		desc = desc[:197] + "..."
 	}
-	user := domain.User{
-		TgID: ctxInfoAboutPurchase.Sender().ID,
-	}
-	purchase := &domain.Purchase{
-		FundID:      fundID,
-		Payer:       user,
-		Amount:      cost,
-		Description: desc,
-	}
-	err = u.purchaseRepository.CreatePurchase(ctx, purchase)
+
+	err = u.purchaseRepository.CreatePurchase(ctx, fundID, cost, id, desc)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return purchase, nil
+	return nil
 }
 
 func (u *FundUsecase) CreateFund(ctx context.Context, fund *domain.Fund) (*domain.Fund, error) {
@@ -135,12 +120,8 @@ func (u *FundUsecase) GetByUserID(ctx context.Context, userID int64, limit int, 
 	return u.fundRepository.GetByUserID(ctx, userID, limit, offset)
 }
 
-func (u *FundUsecase) AddMember(ctx context.Context, fund *domain.Fund, userID int64) error {
-	return u.fundRepository.AddMember(ctx, fund, userID)
-}
-
-func (u *FundUsecase) CreateMember(ctx context.Context, fund *domain.Fund, userID int64) error {
-	return u.fundRepository.AddMember(ctx, fund, userID)
+func (u *FundUsecase) AddMember(ctx context.Context, fundID int, userID int64) error {
+	return u.fundRepository.AddMember(ctx, fundID, userID)
 }
 
 func (u *FundUsecase) IsMember(ctx context.Context, fundID int, userID int64) (bool, error) {
@@ -151,8 +132,8 @@ func (u *FundUsecase) GetPurchasesByFundPagination(ctx context.Context, fundID i
 	return u.purchaseRepository.GetPurchasesByFundPagination(ctx, fundID, limit, offset)
 }
 
-func (u *FundUsecase) CreatePurchase(ctx context.Context, purchase *domain.Purchase) error {
-	return u.purchaseRepository.CreatePurchase(ctx, purchase)
+func (u *FundUsecase) CreatePurchase(ctx context.Context, fundID int, amount float64, IID int64, desc string) error {
+	return u.purchaseRepository.CreatePurchase(ctx, fundID, amount, IID, desc)
 }
 
 func (u *FundUsecase) GetMembers(ctx context.Context, fundID int) ([]domain.User, error) {
@@ -161,4 +142,11 @@ func (u *FundUsecase) GetMembers(ctx context.Context, fundID int) ([]domain.User
 
 func (u *FundUsecase) GetPurchasesByFundAll(ctx context.Context, fundID int) ([]domain.Purchase, error) {
 	return u.purchaseRepository.GetPurchasesByFundAll(ctx, fundID)
+}
+
+func (u *FundUsecase) GetVirtualUsers(ctx context.Context, fundID int, offset, limit int) ([]domain.User, error) {
+	return u.fundRepository.GetVirtualUsers(ctx, fundID, offset, limit)
+}
+func (u *FundUsecase) RemoveUser(ctx context.Context, fundID int, userID int64) error {
+	return u.fundRepository.RemoveUser(ctx, fundID, userID)
 }

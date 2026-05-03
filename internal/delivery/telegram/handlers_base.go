@@ -2,10 +2,13 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"html"
 	"log/slog"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/ganfay/split-core/internal/domain"
 	"github.com/ganfay/split-core/internal/pkg/utils"
@@ -16,23 +19,24 @@ import (
 func (h *BotHandler) HandleStart(c tele.Context) error {
 	ctx := context.Background()
 	var user domain.User
-	user.TgID = c.Sender().ID
 	user.Username = c.Sender().Username
 	user.FirstName = c.Sender().FirstName
-	userCtx := domain.UserContext{
+	userStates := domain.UserContext{
 		State:        domain.StateNone,
 		LastMsgID:    c.Message().ID,
 		ActiveFundID: -1,
 	}
-	err := h.statesUC.SaveUserCtx(ctx, user.TgID, &userCtx)
+	err := h.statesUC.SaveUserCtx(ctx, &c.Sender().ID, &userStates)
 	if err != nil {
 		return err
 	}
 
-	_, err = h.userUC.CreateUser(ctx, &user)
+	userCtx, save, err := h.getUserCtxH(c, ctx)
 	if err != nil {
-		slog.Warn("could not register user", "err", err, "id", user.TgID)
+		return err
 	}
+	defer save()
+
 	args := c.Args()
 
 	// if url invite code
@@ -49,7 +53,7 @@ func (h *BotHandler) HandleStart(c tele.Context) error {
 			return h.error(c, "Invite code not found", err.Error(), Reply)
 		}
 
-		err = h.fundUC.AddMember(ctx, fund, user.TgID)
+		err = h.fundUC.AddMember(ctx, fund.ID, userCtx.InternalID)
 		if err != nil {
 			return h.error(c, "Failed to join the fund", err.Error(), Reply)
 		}
@@ -72,20 +76,12 @@ func (h *BotHandler) HandleBack(c tele.Context) error {
 			slog.Error("Error while handling back", "err", err.Error())
 		}
 	}(c)
-	id := c.Sender().ID
 	ctx := context.Background()
-	userCtx, err := h.statesUC.GetUserCtx(ctx, id)
+	userCtx, save, err := h.getUserCtxH(c, ctx)
 	if err != nil {
 		return h.error(c, "Failed to get user context", err.Error(), Edit)
 	}
-
-	defer func() {
-		err := h.statesUC.SaveUserCtx(ctx, id, userCtx)
-		if err != nil {
-			slog.Error("Failed to save user context", "err", err.Error())
-			return
-		}
-	}()
+	defer save()
 
 	slog.Debug("Handling back", "state", userCtx.State)
 
@@ -105,42 +101,56 @@ func (h *BotHandler) HandleBack(c tele.Context) error {
 			"👇 <i>Choose an action below to get started:</i>"
 		return c.Edit(msg, h.MainMenu(), tele.ModeHTML)
 
+	case domain.StateWaitUsername, domain.StateSuccessAVU, domain.StateWaitToRemove:
+		userCtx.State = domain.StateViewMembers
+		return h.HandleMembers(c)
+	case domain.StateRemovedSuccess:
+		userCtx.State = domain.StateWaitToRemove
+		return h.HandleWaitRemoveUser(c)
 	default:
 		panic("unhandled default case")
 	}
 }
 
 func (h *BotHandler) OnText(c tele.Context) error {
-	id := c.Sender().ID
 	if err := c.Delete(); err != nil {
-		slog.Error("error delete message", "id", id, "err", err.Error())
+		slog.Error("error delete message", "tg_id", c.Sender().ID, "err", err.Error())
 		return err
 	}
 	ctx := context.Background()
 
-	userCtx, err := h.statesUC.GetUserCtx(ctx, c.Sender().ID)
+	userCtx, save, err := h.getUserCtxH(c, ctx)
 	if err != nil {
 		return h.error(c, "Failed to get user context", err.Error(), Edit)
 	}
-
-	defer func() {
-		err = h.statesUC.SaveUserCtx(ctx, c.Sender().ID, userCtx)
-		if err != nil {
-			slog.Error("Failed to save user context", "err", err.Error())
-			return
-		}
-	}()
+	defer save()
 
 	text := c.Text()
+	fullText := strings.TrimSpace(c.Text())
+
+	if fullText == "" {
+		err = errors.New("the name cannot be empty or consist solely of spaces. Please try again")
+		return h.error(c, err.Error(), err.Error(), Edit)
+	}
+
+	if utf8.RuneCountInString(fullText) > 30 {
+		err = errors.New("that name is too long! Let's go with something shorter (up to 30 characters) 😅")
+		return h.error(c, err.Error(), err.Error(), Edit)
+	}
+	fullText = html.EscapeString(fullText)
 	switch userCtx.State {
 	case domain.StateWaitExpense:
 		storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
-		purchase, err := h.fundUC.AddExpense(ctx, c, userCtx.ActiveFundID)
+		cost, desc, err := utils.ParsePurchase(c.Text())
+		if err != nil {
+			return err
+		}
+		err = h.fundUC.AddExpense(ctx, userCtx.ActiveFundID, userCtx.InternalID, desc, cost)
 		if err != nil {
 			return h.error(c, err.Error(), err.Error(), Edit)
 		}
 		userCtx.State = domain.StateViewSuccessExp
-		msg := fmt.Sprintf("✅You successfully added a purchase at your fund\n\nAmount💲: %.2f\nDescription📝: %s", purchase.Amount, purchase.Description)
+		msg := fmt.Sprintf("✅You successfully added a purchase at your fund\n\nAmount💲: %.2f\nDescription📝: %s", cost, desc)
 		_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
 		return err
 	case domain.StateWaitFundName:
@@ -148,7 +158,7 @@ func (h *BotHandler) OnText(c tele.Context) error {
 		botName := os.Getenv("BOT_NAME")
 		InviteCodeInviteURL := utils.GenerateInviteCodeURL(InviteCode, botName)
 		fund := domain.Fund{
-			AuthorID:   id,
+			AuthorID:   userCtx.InternalID,
 			Name:       text,
 			InviteCode: InviteCode,
 		}
@@ -158,7 +168,7 @@ func (h *BotHandler) OnText(c tele.Context) error {
 		}
 		slog.Info("Setting up fund",
 			slog.Int("FundID", fund.ID),
-			slog.Int64("AuthorID", id),
+			slog.Int64("AuthorID", userCtx.InternalID),
 			slog.String("Name", fund.Name),
 			slog.String("ICode", fund.InviteCode),
 		)
@@ -179,12 +189,12 @@ func (h *BotHandler) OnText(c tele.Context) error {
 			return h.error(c, "Failed to get fund", err.Error(), Edit)
 		}
 
-		err = h.fundUC.AddMember(ctx, fund, id)
+		err = h.fundUC.AddMember(ctx, fund.ID, userCtx.InternalID)
 		if err != nil {
 			if strings.Contains(err.Error(), "SQLSTATE 23505") {
 				storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
 				msg := "You already <b>exist</b> in this fund✅"
-				slog.Info("User already exist in fund", "user_id", id, "fund_id", fund.ID)
+				slog.Info("User already exist in fund", "user_id", userCtx.InternalID, "fund_id", fund.ID)
 				_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
 				return err
 			}
@@ -199,13 +209,38 @@ func (h *BotHandler) OnText(c tele.Context) error {
 			return h.error(c, "Failed to edit fund", err.Error(), Edit)
 		}
 		userCtx.LastMsgID = ctxMsg.ID
-		slog.Info("Setting up fund join code", "id", id)
-	case domain.StateNone, domain.StateViewHistory, domain.StateFundMenu, domain.StateViewFund, domain.StateViewSettleUp, domain.StateViewMembers, domain.StateViewSuccessExp:
+		slog.Info("Setting up fund join code", "id", userCtx.InternalID)
+	case domain.StateWaitUsername:
+		IID, err := h.userUC.CreateVirtualUser(ctx, fullText)
+		if err != nil {
+			return h.error(c, "Failed to create user", err.Error(), Edit)
+		}
+		err = h.fundUC.AddMember(ctx, userCtx.ActiveFundID, IID)
+		if err != nil {
+			slog.Debug("ADD MEMBER METHOD ERR", "err", err, "user_id", userCtx.ActiveFundID, "fund_id", userCtx.ActiveFundID)
+			return h.error(c, "Failed to add fund", err.Error(), Edit)
+		}
+		userCtx.State = domain.StateSuccessAVU
+		storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
+		msg := fmt.Sprintf(
+			"✅ Member <b>%s(IID: %d)</b> successfully added to the fund!\n\n"+
+				"<i>You can now select them when logging new expenses.</i> 🧾",
+			text, IID,
+		)
+		_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
+		if err != nil {
+			return h.error(c, "Failed to edit fund", err.Error(), Edit)
+		}
+		return err
+	case domain.StateNone, domain.StateViewHistory, domain.StateFundMenu,
+		domain.StateViewFund, domain.StateViewSettleUp, domain.StateViewMembers,
+		domain.StateViewSuccessExp, domain.StateWaitToRemove, domain.StateRemovedSuccess,
+		domain.StateSuccessAVU:
 		storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
 		msg := "No answer"
 		_, err := c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
 		if err != nil {
-			slog.Error("error to edit message", "id", id, "err", err.Error())
+			slog.Error("error to edit message", "id", userCtx.InternalID, "err", err.Error())
 			return err
 		}
 
@@ -217,7 +252,7 @@ func (h *BotHandler) OnText(c tele.Context) error {
 }
 
 func (h *BotHandler) error(c tele.Context, userMsg string, techMsg string, mode SendMode) error {
-	slog.Error("Technical error", "msg", techMsg, "user_id", c.Sender().ID)
+	slog.Error("Technical error", "msg", techMsg, "tg_id", c.Sender().ID)
 
 	displayMsg := "⚠️ <b>Oops! Something went wrong</b>\n\n" + userMsg
 
@@ -225,12 +260,12 @@ func (h *BotHandler) error(c tele.Context, userMsg string, techMsg string, mode 
 		_ = c.Respond()
 	}
 	ctx := context.Background()
-	userCtx, err := h.statesUC.GetUserCtx(ctx, c.Sender().ID)
+	userCtx, err := h.statesUC.GetUserCtx(ctx, &c.Sender().ID)
 	if err != nil {
 		return fmt.Errorf("error getting user context: %s", err.Error())
 	}
 	defer func() {
-		err := h.statesUC.SaveUserCtx(ctx, c.Sender().ID, userCtx)
+		err := h.statesUC.SaveUserCtx(ctx, &c.Sender().ID, userCtx)
 		if err != nil {
 			slog.Error("error saving user context", "user_id", c.Sender().ID, "err", err.Error())
 			return
