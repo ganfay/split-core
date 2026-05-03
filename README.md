@@ -1,5 +1,7 @@
 # 🚀 SplitCore — Telegram Expense Organizer
 
+[![SplitCore CI](https://github.com/GanFay/SplitCore/actions/workflows/ci.yml/badge.svg)](https://github.com/GanFay/SplitCore/actions/workflows/ci.yml)
+
 **SplitCore** is a Telegram bot designed to automate shared expense tracking for groups of friends, travelers, or event organizers. No more messy Excel sheets or "who owes whom" arguments.
 
 ## 🔥 The Core Idea
@@ -15,7 +17,7 @@ Users create "Funds" (events), invite friends via unique deep-links, and record 
 * **Framework:**[telebot.v4](https://github.com/tucnak/telebot) (Telegram Bot API)
 * **Database:** PostgreSQL
 * **Driver:** [pgx/v5](https://github.com/jackc/pgx) (Connection Pool)
-* **State Management:** In-memory FSM (Finite State Machine) with Mutex locks.
+* **State Management:** Redis 8.6.2 via [go-redis/v9](https://github.com/redis/go-redis) for persistent FSM.
 * **Infrastructure:** Docker, Docker Compose, Makefile.
 * **Migrations:** [golang-migrate](https://github.com/golang-migrate/migrate).
 
