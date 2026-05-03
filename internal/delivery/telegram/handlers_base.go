@@ -101,10 +101,12 @@ func (h *BotHandler) HandleBack(c tele.Context) error {
 			"👇 <i>Choose an action below to get started:</i>"
 		return c.Edit(msg, h.MainMenu(), tele.ModeHTML)
 
-	case domain.StateWaitUsername, domain.StateSuccessAVU:
+	case domain.StateWaitUsername, domain.StateSuccessAVU, domain.StateWaitToRemove:
 		userCtx.State = domain.StateViewMembers
 		return h.HandleMembers(c)
-
+	case domain.StateRemovedSuccess:
+		userCtx.State = domain.StateWaitToRemove
+		return h.HandleWaitRemoveUser(c)
 	default:
 		panic("unhandled default case")
 	}
@@ -229,8 +231,11 @@ func (h *BotHandler) OnText(c tele.Context) error {
 		if err != nil {
 			return h.error(c, "Failed to edit fund", err.Error(), Edit)
 		}
-
-	case domain.StateNone, domain.StateViewHistory, domain.StateFundMenu, domain.StateViewFund, domain.StateViewSettleUp, domain.StateViewMembers, domain.StateViewSuccessExp:
+		return err
+	case domain.StateNone, domain.StateViewHistory, domain.StateFundMenu,
+		domain.StateViewFund, domain.StateViewSettleUp, domain.StateViewMembers,
+		domain.StateViewSuccessExp, domain.StateWaitToRemove, domain.StateRemovedSuccess,
+		domain.StateSuccessAVU:
 		storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
 		msg := "No answer"
 		_, err := c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)

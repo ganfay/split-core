@@ -26,3 +26,7 @@ func (u *userUsecase) CreateVirtualUser(ctx context.Context, firstName string) (
 func (u *userUsecase) GetUserByIID(ctx context.Context, iID int64) (*domain.User, error) {
 	return u.repo.GetUserByIID(ctx, iID)
 }
+
+func (u *userUsecase) DeleteUser(ctx context.Context, iID int64) error {
+	return u.repo.DeleteUser(ctx, iID)
+}

@@ -10,6 +10,7 @@ type UserRepository interface {
 	GetOrCreateRealUser(ctx context.Context, tgID *int64, username, firstName string) (int64, error)
 	CreateVirtualUser(ctx context.Context, firstName string) (int64, error)
 	GetUserByIID(ctx context.Context, iID int64) (*domain.User, error)
+	DeleteUser(ctx context.Context, iID int64) error
 }
 
 type FundRepository interface {
@@ -17,7 +18,8 @@ type FundRepository interface {
 	GetInfo(ctx context.Context, reqFund *domain.Fund) (*domain.Fund, error)
 	GetByUserID(ctx context.Context, userID int64, limit int, offset int) ([]domain.Fund, error)
 	GetMembers(ctx context.Context, fundID int) ([]domain.User, error)
-
+	GetVirtualUsers(ctx context.Context, fundID int, offset, limit int) ([]domain.User, error)
+	RemoveUser(ctx context.Context, fundID int, userID int64) error
 	AddMember(ctx context.Context, fundID int, userID int64) error
 	IsMember(ctx context.Context, fundID int, IID int64) (bool, error)
 }

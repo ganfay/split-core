@@ -22,4 +22,6 @@ const (
 	StateViewMembers
 	StateWaitUsername
 	StateSuccessAVU
+	StateWaitToRemove
+	StateRemovedSuccess
 )

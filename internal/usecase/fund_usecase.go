@@ -143,3 +143,10 @@ func (u *FundUsecase) GetMembers(ctx context.Context, fundID int) ([]domain.User
 func (u *FundUsecase) GetPurchasesByFundAll(ctx context.Context, fundID int) ([]domain.Purchase, error) {
 	return u.purchaseRepository.GetPurchasesByFundAll(ctx, fundID)
 }
+
+func (u *FundUsecase) GetVirtualUsers(ctx context.Context, fundID int, offset, limit int) ([]domain.User, error) {
+	return u.fundRepository.GetVirtualUsers(ctx, fundID, offset, limit)
+}
+func (u *FundUsecase) RemoveUser(ctx context.Context, fundID int, userID int64) error {
+	return u.fundRepository.RemoveUser(ctx, fundID, userID)
+}

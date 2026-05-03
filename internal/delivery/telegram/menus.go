@@ -33,11 +33,38 @@ func (h *BotHandler) BackMenu() *tele.ReplyMarkup {
 	return &menu
 }
 
+func (h *BotHandler) MenuRemoveVUsers(offset int, u []domain.User) *tele.ReplyMarkup {
+	menu := tele.ReplyMarkup{ResizeKeyboard: true}
+	limit := 7
+	btnPrev := menu.Data("⬅️ Prev", CommandPrevRVU, strconv.Itoa(offset-limit))
+	btnNext := menu.Data("Next ➡️", CommandNextRVU, strconv.Itoa(offset+limit))
+	btnBack := menu.Data("⬅️⬅️Back", CommandBack)
+	var rows []tele.Row
+	for _, vUser := range u {
+		btn := menu.Data(vUser.FirstName, CommandRemoveUser, strconv.FormatInt(vUser.ID, 10))
+		rows = append(rows, menu.Row(btn))
+	}
+	var row []tele.Btn
+
+	if offset > 0 {
+		row = append(row, btnPrev)
+	}
+	if len(u) == limit {
+		row = append(row, btnNext)
+	}
+	if len(row) > 0 {
+		rows = append(rows, row)
+	}
+	rows = append(rows, menu.Row(btnBack))
+	menu.Inline(rows...)
+	return &menu
+}
+
 func (h *BotHandler) MenuMembersView() *tele.ReplyMarkup {
 	menu := tele.ReplyMarkup{ResizeKeyboard: true}
 	btnBack := menu.Data("🔙🔙Back", CommandBack)
 	btnAddVirtualUser := menu.Data("➕Add Virtual User", CommandAddUser)
-	btnDeleteVirtualUser := menu.Data("➖Delete Virtual User", CommandRemoveUser)
+	btnDeleteVirtualUser := menu.Data("➖Remove Virtual User", CommandSelectToRemoveUser)
 	menu.Inline(
 		menu.Row(btnAddVirtualUser),
 		menu.Row(btnDeleteVirtualUser),

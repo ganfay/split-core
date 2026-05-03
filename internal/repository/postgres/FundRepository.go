@@ -136,3 +136,33 @@ func (r *FundRepository) GetMembers(ctx context.Context, fundID int) ([]domain.U
 	}
 	return users, nil
 }
+
+func (r *FundRepository) GetVirtualUsers(ctx context.Context, fundID int, offset, limit int) ([]domain.User, error) {
+	var users []domain.User
+	query := `SELECT fm.user_id, u.first_name
+FROM app.fund_members fm 
+JOIN app.users u ON fm.user_id = u.id
+WHERE fm.fund_id = $1 AND u.is_virtual = true
+LIMIT $2 OFFSET $3`
+	rows, err := r.DB.Query(ctx, query, fundID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var user domain.User
+		err = rows.Scan(&user.ID, &user.FirstName)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+func (r *FundRepository) RemoveUser(ctx context.Context, fundID int, userID int64) error {
+	query := `DELETE FROM app.fund_members
+WHERE fund_id = $1 AND user_id = $2`
+	_, err := r.DB.Exec(ctx, query, fundID, userID)
+	return err
+}

@@ -62,3 +62,9 @@ SELECT tg_id, username, first_name, is_virtual, created_at FROM app.users WHERE 
 	}
 	return &u, nil
 }
+
+func (r *UserRepository) DeleteUser(ctx context.Context, iID int64) error {
+	query := `DELETE FROM app.users WHERE id = $1`
+	_, err := r.DB.Exec(ctx, query, iID)
+	return err
+}

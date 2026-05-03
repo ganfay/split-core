@@ -14,7 +14,8 @@ type FundUsecase interface {
 	AddMember(ctx context.Context, fundID int, IID int64) error
 	IsMember(ctx context.Context, fundID int, IID int64) (bool, error)
 	GetMembers(ctx context.Context, fundID int) ([]User, error)
-
+	GetVirtualUsers(ctx context.Context, fundID int, offset, limit int) ([]User, error)
+	RemoveUser(ctx context.Context, fundID int, userID int64) error
 	GetPurchasesByFundPagination(ctx context.Context, fundID int, limit int, offset int) ([]Purchase, error)
 	CreatePurchase(ctx context.Context, fundID int, amount float64, IID int64, desc string) error
 }
@@ -23,6 +24,7 @@ type UserUsecase interface {
 	GetOrCreateRealUser(ctx context.Context, tgID *int64, username string, firstName string) (int64, error)
 	CreateVirtualUser(ctx context.Context, firstName string) (int64, error)
 	GetUserByIID(ctx context.Context, iID int64) (*User, error)
+	DeleteUser(ctx context.Context, iID int64) error
 }
 
 type StatesUsecase interface {

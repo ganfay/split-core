@@ -29,7 +29,7 @@ The project is built with a strict separation of concerns, ensuring high testabi
 - `internal/pkg/` — Internal utilities (e.g., deep-link generators).
 
 ## 📍 Roadmap
-**Phase 1: MVP (Completed) ✅**
+**MVP (Completed) ✅**
 - [x] Clean Architecture setup and Dependency Injection.
 - [x] PostgreSQL integration with migrations.
 - [x] FSM for user input handling and seamless UX.
@@ -38,13 +38,15 @@ The project is built with a strict separation of concerns, ensuring high testabi
 - [x] Advanced debt calculation algorithm (Settle Up).
 - [x] Move FSM states from in-memory to Redis for persistence and horizontal scaling.
 - [x] Graceful shutdown implementation.
+- [x] Table-Driven Unit Tests for the settlement math module.
+- [x] CI/CD Pipeline (GitHub Actions + golangci-lint).
 
-**Phase 2: Enhancements (Future) 🚀**
+**V1.1.0
+- [x] Virtual Users (Add members without Telegram accounts).
 
-- [ ] Add unit tests for the settlement math module.
-- [ ] CI/CD
-- [ ] Deploy
-- [ ] New features (multivalutes, virtual users)
+**Enhancements (Future) 🚀**
+- [ ] Deploy to VPS (DigitalOcean).
+- [ ] Multi-currency support.
 
 ## 🚀 Getting Started (Dev)
 
