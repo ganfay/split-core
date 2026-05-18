@@ -58,7 +58,7 @@ logs:
 	docker logs --tail=100 $(name)
 
 lint:
-	@golangci-lint run ${PROJECT_ROOT}
+	@golangci-lint run
 
 build:
 	@go build -o ./bin/bot ./cmd/bot/main.go

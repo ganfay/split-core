@@ -429,6 +429,10 @@ func (h *BotHandler) DeleteFund(c tele.Context) error {
 	defer save()
 	userCtx.State = domain.StateDelete
 	err = h.fundUC.DeleteFund(ctx, userCtx.ActiveFundID, userCtx.InternalID)
+	if err != nil {
+		err := h.error(c, "PLease try again later", err.Error(), Edit)
+		return err
+	}
 	storedMessage := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
 	msg := "✅Fund has been successfully deleted"
 	_, err = c.Bot().Edit(storedMessage, msg, h.BackMenu(), tele.ModeHTML)
