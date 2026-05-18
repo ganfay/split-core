@@ -53,6 +53,12 @@ func (r *FundRepository) CreateFund(ctx context.Context, fund *domain.Fund) (*do
 	return fund, err
 }
 
+func (r *FundRepository) DeleteFund(ctx context.Context, fundID int) error {
+	query := `DELETE FROM app.funds WHERE id = $1`
+	_, err := r.DB.Exec(ctx, query, fundID)
+	return err
+}
+
 func (r *FundRepository) GetInfo(ctx context.Context, reqFund *domain.Fund) (*domain.Fund, error) {
 	var fund domain.Fund
 	query := `

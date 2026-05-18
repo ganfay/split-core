@@ -51,8 +51,10 @@ The project is built with a strict separation of concerns, ensuring high testabi
 ### V1.1.1
 - [x] Deploy to VPS (DigitalOcean).
 
+### V1.1.2
+- [x] **Secure Fund Deletion:** Creator-only access with FSM confirmation state to prevent accidental wipes.
+
 ### 🚀 Enhancements (Future)
-- [ ] **Secure Fund Deletion:** Creator-only access with FSM confirmation state to prevent accidental wipes.
 - [ ] **Expense Management:** Ability to delete or edit logged mistakes.
 - [ ] **Settle Debt feature:** "Mark as paid" logic to automatically adjust balances when someone returns the money.
 - [ ] **Export to CSV:** Generate and download fund reports on the fly.

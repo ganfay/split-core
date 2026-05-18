@@ -24,4 +24,6 @@ const (
 	StateSuccessAVU
 	StateWaitToRemove
 	StateRemovedSuccess
+	StateWaitDelete
+	StateDelete
 )

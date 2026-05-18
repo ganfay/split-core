@@ -86,11 +86,11 @@ func (h *BotHandler) HandleBack(c tele.Context) error {
 	slog.Debug("Handling back", "state", userCtx.State)
 
 	switch userCtx.State {
-	case domain.StateWaitExpense, domain.StateViewHistory, domain.StateViewSuccessExp, domain.StateViewSettleUp, domain.StateViewMembers:
+	case domain.StateWaitExpense, domain.StateViewHistory, domain.StateViewSuccessExp, domain.StateViewSettleUp, domain.StateViewMembers, domain.StateWaitDelete:
 		userCtx.State = domain.StateViewFund
 		return h.HandleFund(c)
 
-	case domain.StateViewFund:
+	case domain.StateViewFund, domain.StateDelete:
 		userCtx.State = domain.StateFundMenu
 		return h.HandleMyFund(c)
 
@@ -235,7 +235,7 @@ func (h *BotHandler) OnText(c tele.Context) error {
 	case domain.StateNone, domain.StateViewHistory, domain.StateFundMenu,
 		domain.StateViewFund, domain.StateViewSettleUp, domain.StateViewMembers,
 		domain.StateViewSuccessExp, domain.StateWaitToRemove, domain.StateRemovedSuccess,
-		domain.StateSuccessAVU:
+		domain.StateSuccessAVU, domain.StateDelete, domain.StateWaitDelete:
 		storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
 		msg := "No answer"
 		_, err := c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)

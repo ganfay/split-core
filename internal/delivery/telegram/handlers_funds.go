@@ -176,7 +176,7 @@ func (h *BotHandler) HandleFund(c tele.Context) error {
 		fund.Name, author.Username, fund.CreatedAt.In(location).Format(`02.01.2006 15:04`), fund.InviteCode,
 	)
 	storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
-	_, err = c.Bot().Edit(storedMsg, msg, h.FundViewMenu(), tele.ModeHTML)
+	_, err = c.Bot().Edit(storedMsg, msg, h.FundViewMenu(userCtx.InternalID, fund.AuthorID), tele.ModeHTML)
 	return err
 }
 
@@ -403,6 +403,35 @@ func (h *BotHandler) HandleRemoveVUser(c tele.Context) error {
 
 	storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
 	_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
+	return err
+}
+
+func (h *BotHandler) HandleDeleteFund(c tele.Context) error {
+	ctx := context.Background()
+	userCtx, save, err := h.getUserCtxH(c, ctx)
+	if err != nil {
+		return err
+	}
+	userCtx.State = domain.StateWaitDelete
+	defer save()
+	msg := "⚠️Are you sure want to delete this fund"
+	storedMessage := &tele.Message{Chat: c.Chat(), ID: userCtx.LastMsgID}
+	_, err = c.Bot().Edit(storedMessage, msg, h.SureMenu(), tele.ModeHTML)
+	return err
+}
+
+func (h *BotHandler) DeleteFund(c tele.Context) error {
+	ctx := context.Background()
+	userCtx, save, err := h.getUserCtxH(c, ctx)
+	if err != nil {
+		return err
+	}
+	defer save()
+	userCtx.State = domain.StateDelete
+	err = h.fundUC.DeleteFund(ctx, userCtx.ActiveFundID, userCtx.InternalID)
+	storedMessage := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
+	msg := "✅Fund has been successfully deleted"
+	_, err = c.Bot().Edit(storedMessage, msg, h.BackMenu(), tele.ModeHTML)
 	return err
 }
 

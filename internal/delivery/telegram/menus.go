@@ -96,19 +96,36 @@ func (h *BotHandler) MenuViewFundLogs(offset int, p []domain.Purchase) *tele.Rep
 	return &menu
 }
 
-func (h *BotHandler) FundViewMenu() *tele.ReplyMarkup {
+func (h *BotHandler) FundViewMenu(IID int64, fundA_IID int64) *tele.ReplyMarkup {
 	menu := tele.ReplyMarkup{ResizeKeyboard: true}
 	btnLogExp := menu.Data("💸 Log Expense", CommandLogExpense)
 	btnLogs := menu.Data("🧾 Logs", CommandLogs, "0")
 	btnBal := menu.Data("⚖️ Settle Up", CommandSettleUp)
 	btnMembers := menu.Data("👥 Member", CommandMembers)
+	btnDelete := menu.Data("❌ Delete", CommandDelete)
 	btnBack := menu.Data("🔙🔙Back", CommandBack)
-	menu.Inline(
-		menu.Row(btnLogExp),
-		menu.Row(btnLogs),
-		menu.Row(btnBal),
-		menu.Row(btnMembers),
-		menu.Row(btnBack))
+	var rows []tele.Row
+	rows = append(rows, menu.Row(btnLogExp))
+	rows = append(rows, menu.Row(btnLogs))
+	rows = append(rows, menu.Row(btnBal))
+	rows = append(rows, menu.Row(btnMembers))
+	if IID == fundA_IID {
+		rows = append(rows, menu.Row(btnDelete))
+	}
+	rows = append(rows, menu.Row(btnBack))
+	menu.Inline(rows...)
+	return &menu
+}
+
+func (h *BotHandler) SureMenu() *tele.ReplyMarkup {
+	menu := tele.ReplyMarkup{ResizeKeyboard: true}
+	btnYes := menu.Data("✅YES", CommandYes)
+	btnNo := menu.Data("❌NO", CommandNo)
+
+	var row []tele.Btn
+	row = append(row, btnYes)
+	row = append(row, btnNo)
+	menu.Inline(menu.Row(row...))
 	return &menu
 }
 

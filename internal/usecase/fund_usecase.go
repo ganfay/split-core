@@ -112,6 +112,18 @@ func (u *FundUsecase) CreateFund(ctx context.Context, fund *domain.Fund) (*domai
 	return u.fundRepository.CreateFund(ctx, fund)
 }
 
+func (u *FundUsecase) DeleteFund(ctx context.Context, fundID int, IID int64) error {
+	fund := &domain.Fund{ID: fundID}
+	fund, err := u.fundRepository.GetInfo(ctx, fund)
+	if err != nil {
+		return err
+	}
+	if fund.AuthorID != IID {
+		return errors.New("forbidden")
+	}
+	return u.fundRepository.DeleteFund(ctx, fundID)
+}
+
 func (u *FundUsecase) GetInfo(ctx context.Context, reqFund *domain.Fund) (*domain.Fund, error) {
 	return u.fundRepository.GetInfo(ctx, reqFund)
 }

@@ -41,6 +41,7 @@ const (
 	CommandLogs               = "logs"
 	CommandSettleUp           = "settle_up"
 	CommandMembers            = "members"
+	CommandDelete             = "delete_fund"
 	CommandPreviousVFL        = "previous_vfl"
 	CommandNextVFL            = "settle_up_vfl"
 	CommandAddUser            = "add_user"
@@ -48,4 +49,6 @@ const (
 	CommandPrevRVU            = "prev_rvu"
 	CommandNextRVU            = "next_rvu"
 	CommandRemoveUser         = "remove_user"
+	CommandYes                = "yes"
+	CommandNo                 = "no"
 )
