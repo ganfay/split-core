@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,6 +12,7 @@ import (
 	"github.com/ganfay/split-core/internal/config"
 	"github.com/ganfay/split-core/internal/delivery/grpcDelivery"
 	"github.com/ganfay/split-core/internal/delivery/telegram"
+	"github.com/ganfay/split-core/internal/delivery/web"
 	"github.com/ganfay/split-core/internal/pkg/logger"
 	"github.com/ganfay/split-core/internal/repository/postgres"
 	"github.com/ganfay/split-core/internal/repository/rabbitmq"
@@ -66,8 +68,17 @@ func main() {
 	}
 	h.SetupRegister(b)
 
+	wh := web.NewServerHandler(fundUC, userUC, stateUC)
+	mux := wh.SetupRoutes()
+
 	grpcServer := grpcDelivery.NewServer(cfg.GRpcPort, *fundUC, b)
 
+	go func() {
+		err = http.ListenAndServe(":8080", mux)
+		if err != nil {
+			slog.Error("Error starting http server", "err", err)
+		}
+	}()
 	go func() {
 		if err = grpcServer.Start(); err != nil {
 			slog.Error("gRPC server error", "err", err)
