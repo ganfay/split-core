@@ -41,6 +41,7 @@ services:
       PG_USER: ${PG_USER}
       PG_PASS: ${PG_PASS}
       PG_DB: ${PG_DB}
+      ENV: ${ENV:-local}
 
       PG_HOST: db
       REDIS_HOST: redis
@@ -78,6 +79,7 @@ services:
       rabbitmq:
         condition: service_started
     environment:
+      ENV: ${ENV:-local}
       GRPC_PORT: ${GRPC_PORT}
       RMQ_PASS: ${RMQ_PASS}
       RMQ_USER: ${RMQ_USER}
@@ -86,8 +88,8 @@ services:
     container_name: split-rabbit
     restart: always
     ports:
-      - 5672:5672
-      - 15672:15672
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: ${RMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RMQ_PASS}
