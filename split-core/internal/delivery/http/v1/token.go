@@ -24,7 +24,7 @@ func GetRefreshSecret() []byte {
 	return got
 }
 
-func GenerateAccessJWT(userID int) (string, error) {
+func GenerateAccessJWT(userID int64) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
 		"exp":     time.Now().Add(15 * time.Minute).Unix(),
@@ -40,7 +40,7 @@ func GenerateAccessJWT(userID int) (string, error) {
 	return signedToken, nil
 }
 
-func GenerateRefreshJWT(userID int) (string, error) {
+func GenerateRefreshJWT(userID int64) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
 		"exp":     time.Now().Add(7 * 24 * time.Hour).Unix(),
@@ -56,8 +56,8 @@ func GenerateRefreshJWT(userID int) (string, error) {
 	return signedToken, nil
 }
 
-func parseJWT(signedToken string, secret []byte) (int, error) {
-	token, err := jwt.Parse(signedToken, func(token *jwt.Token) (interface{}, error) {
+func parseJWT(signedToken string, secret []byte) (int64, error) {
+	token, err := jwt.Parse(signedToken, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
@@ -85,13 +85,13 @@ func parseJWT(signedToken string, secret []byte) (int, error) {
 		return 0, fmt.Errorf("invalid user_id type")
 	}
 
-	return int(userIDFloat), nil
+	return int64(userIDFloat), nil
 }
 
-func ParseJWTAccess(signedToken string) (int, error) {
+func ParseJWTAccess(signedToken string) (int64, error) {
 	return parseJWT(signedToken, GetAccessSecret())
 }
 
-func ParseJWTRefresh(signedToken string) (int, error) {
+func ParseJWTRefresh(signedToken string) (int64, error) {
 	return parseJWT(signedToken, GetRefreshSecret())
 }
