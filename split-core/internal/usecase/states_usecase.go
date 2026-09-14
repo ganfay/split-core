@@ -22,3 +22,11 @@ func (r *StatesUsecase) GetUserCtx(ctx context.Context, tgID *int64) (*domain.Us
 func (r *StatesUsecase) SaveUserCtx(ctx context.Context, tgID *int64, value *domain.UserContext) error {
 	return r.redisRep.SaveUserCtx(ctx, tgID, value)
 }
+
+func (r *StatesUsecase) Session(ctx context.Context, s domain.Session) error {
+	return r.redisRep.Session(ctx, s)
+}
+
+func (r *StatesUsecase) GetSessionCtx(ctx context.Context, uuid string) (domain.Session, error) {
+	return r.redisRep.GetSessionCtx(ctx, uuid)
+}

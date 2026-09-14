@@ -20,5 +20,9 @@ func GenerateInviteCode(lenCode int) string {
 }
 
 func GenerateInviteCodeURL(inviteCode string, botName string) string {
-	return fmt.Sprintf("t.me/%s?start=%s", botName, inviteCode)
+	return fmt.Sprintf("t.me/%s?start=invite_%s", botName, inviteCode)
+}
+
+func GenerateLoginCodeURL(inviteCode string, botName string) string {
+	return fmt.Sprintf("t.me/%s?start=auth_%s", botName, inviteCode)
 }

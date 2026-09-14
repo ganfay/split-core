@@ -34,6 +34,8 @@ type PurchaseRepository interface {
 type RedisRepository interface {
 	GetUserCtx(ctx context.Context, userID *int64) (*domain.UserContext, error)
 	SaveUserCtx(ctx context.Context, userID *int64, value *domain.UserContext) error
+	Session(ctx context.Context, s domain.Session) error
+	GetSessionCtx(ctx context.Context, uuid string) (domain.Session, error)
 }
 
 type EventPublisher interface {

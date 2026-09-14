@@ -31,4 +31,6 @@ type UserUsecase interface {
 type StatesUsecase interface {
 	GetUserCtx(ctx context.Context, tgID *int64) (*UserContext, error)
 	SaveUserCtx(ctx context.Context, tgID *int64, value *UserContext) error
+	Session(ctx context.Context, s Session) error
+	GetSessionCtx(ctx context.Context, uuid string) (Session, error)
 }

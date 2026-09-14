@@ -12,7 +12,6 @@ import (
 
 	"github.com/ganfay/split-core/internal/domain"
 	"github.com/ganfay/split-core/internal/pkg/utils"
-
 	tele "gopkg.in/telebot.v4"
 )
 
@@ -30,7 +29,7 @@ func (h *BotHandler) HandleStart(c tele.Context) error {
 	if err != nil {
 		return err
 	}
-
+	slog.Debug("Save userctx")
 	userCtx, save, err := h.getUserCtxH(c, ctx)
 	if err != nil {
 		return err
@@ -38,31 +37,58 @@ func (h *BotHandler) HandleStart(c tele.Context) error {
 	defer save()
 
 	args := c.Args()
-
-	// if url invite code
+	// check for args in /start command
 	if len(args) == 1 {
 		arg := args[0]
-		if len(arg) != 6 {
+		slog.Debug("Start checking args")
+
+		splitArg := strings.Split(arg, "_")
+		switch splitArg[0] {
+		case "invite":
+			// if url invite code
+			slog.Debug("Checking invite")
+			fund := &domain.Fund{InviteCode: splitArg[1]}
+			fund, err = h.fundUC.GetInfo(ctx, fund)
+			if err != nil {
+				return h.error(c, "Invite code not found", err.Error(), Reply)
+			}
+			err = h.fundUC.AddMember(ctx, fund.ID, userCtx.InternalID)
+			if err != nil {
+				return h.error(c, "Failed to join the fund", err.Error(), Reply)
+			}
+			msg := "Congratulations🎉\n\nYou have successfully joined to the fund😊!\n" +
+				"You can see them in <b>My Funds</b>⬇️"
+			return c.Reply(msg, h.MainMenu(), tele.ModeHTML)
+		case "auth":
+			// if url login for web version
+			slog.Debug("Checking auth")
+
+			session := domain.Session{
+				Uuid:      splitArg[1],
+				Status:    "authenticated",
+				Firstname: c.Sender().FirstName,
+				Username:  c.Sender().Username,
+				IID:       userCtx.InternalID,
+				TgID:      c.Sender().ID,
+			}
+			sessionCtx, err := h.statesUC.GetSessionCtx(ctx, splitArg[1])
+			if err != nil {
+				return err
+			}
+			slog.Debug("Get session ctx", "status", sessionCtx.Status)
+			err = h.statesUC.Session(ctx, session)
+			if err != nil {
+				slog.Error("[TELEGRAM] Failed to auth]")
+				return err
+			}
+
+			msg := "Congratulations🎉\n\nYou have successfully login and link account!\nYou can go to web version or start using app here"
+			return c.Reply(msg, h.MainMenu(), tele.ModeHTML)
+		default:
 			return c.Send("⚠️ Invalid invite link format.")
 		}
-		fund := &domain.Fund{
-			InviteCode: arg,
-		}
-		fund, err = h.fundUC.GetInfo(ctx, fund)
-		if err != nil {
-			return h.error(c, "Invite code not found", err.Error(), Reply)
-		}
 
-		err = h.fundUC.AddMember(ctx, fund.ID, userCtx.InternalID)
-		if err != nil {
-			return h.error(c, "Failed to join the fund", err.Error(), Reply)
-		}
-
-		msg := "Congratulations🎉\n\nYou have successfully joined to the fund😊!\n" +
-			"You can see them in <b>My Funds</b>⬇️"
-		return c.Reply(msg, h.MainMenu(), tele.ModeHTML)
 	}
-	// if url invite code
 	msg := "👋 <b>Welcome to SplitCore!</b>\n\n" +
 		"I will help you and your friends easily track shared expenses and settle debts.\n\n" +
 		"👇 <i>Choose an action below to get started:</i>"

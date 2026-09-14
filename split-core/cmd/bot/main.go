@@ -11,8 +11,9 @@ import (
 
 	"github.com/ganfay/split-core/internal/config"
 	"github.com/ganfay/split-core/internal/delivery/grpcDelivery"
+	myhttp "github.com/ganfay/split-core/internal/delivery/http"
+	v1 "github.com/ganfay/split-core/internal/delivery/http/v1"
 	"github.com/ganfay/split-core/internal/delivery/telegram"
-	"github.com/ganfay/split-core/internal/delivery/web"
 	"github.com/ganfay/split-core/internal/pkg/logger"
 	"github.com/ganfay/split-core/internal/repository/postgres"
 	"github.com/ganfay/split-core/internal/repository/rabbitmq"
@@ -68,15 +69,17 @@ func main() {
 	}
 	h.SetupRegister(b)
 
-	wh := web.NewServerHandler(fundUC, userUC, stateUC)
-	mux := wh.SetupRoutes()
-
 	grpcServer := grpcDelivery.NewServer(cfg.GRpcPort, *fundUC, b)
 
+	mux := http.NewServeMux()
+	v1Handlers := v1.NewHandler(fundUC, userUC, stateUC)
+	v1Handlers.RegisterRoutes(mux)
+	s := myhttp.NewServer(":8080", v1.Middleware(mux))
+
 	go func() {
-		err = http.ListenAndServe(":8080", mux)
+		err = s.Start()
 		if err != nil {
-			slog.Error("Error starting http server", "err", err)
+			slog.Error("Error starting server", "err", err)
 		}
 	}()
 	go func() {
@@ -95,7 +98,10 @@ func main() {
 
 	sign := <-quit
 	slog.Info("Stopping application...", "signal", sign.String())
-
+	err = s.Stop()
+	if err != nil {
+		slog.Error("Error stopping web server", "err", err)
+	}
 	b.Stop()
 	pool.Close()
 	err = rdb.Close()

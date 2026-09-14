@@ -37,3 +37,26 @@ func (r *Repository) GetUserCtx(ctx context.Context, tgID *int64) (*domain.UserC
 	json, err := utils.DecodeJSON[domain.UserContext](data)
 	return &json, err
 }
+
+func (r *Repository) Session(ctx context.Context, s domain.Session) error {
+	key := fmt.Sprintf("session:%s", s.Uuid)
+	json, err := utils.EncodeJSON[domain.Session](s)
+	if err != nil {
+		return err
+	}
+	return r.rdb.Set(ctx, key, json, 3*time.Minute).Err()
+}
+
+func (r *Repository) GetSessionCtx(ctx context.Context, uuid string) (domain.Session, error) {
+
+	key := fmt.Sprintf("session:%s", uuid)
+	data, err := r.rdb.Get(ctx, key).Bytes()
+	if err != nil {
+		return domain.Session{}, err
+	}
+	resp, err := utils.DecodeJSON[domain.Session](data)
+	if err != nil {
+		return domain.Session{}, err
+	}
+	return resp, nil
+}
