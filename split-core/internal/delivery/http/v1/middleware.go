@@ -1,8 +1,10 @@
 package v1
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 )
 
 func Middleware(next http.Handler) http.Handler {
@@ -16,4 +18,24 @@ func Middleware(next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(w, r)
 	})
+}
+
+func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		idd, err := ParseJWTAccess(tokenString)
+		if err != nil {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
+		ctx := context.WithValue(r.Context(), "id", idd)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	}
 }
