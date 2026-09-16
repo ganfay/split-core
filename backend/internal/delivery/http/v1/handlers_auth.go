@@ -10,6 +10,16 @@ import (
 	"github.com/google/uuid"
 )
 
+// CreateSession
+//
+// @Summary      Create session
+// @Description  Returns UUID.
+// @Tags         sessions
+// @Accept       json
+// @Produce      json
+// @Success      200 {string} domain.Session true
+// @Failure      500
+// @Router       /api/v1/auth/telegram/init [post]
 func (s *Handler) CreateSession(w http.ResponseWriter, _ *http.Request) {
 	u := uuid.New()
 	ctx := context.Background()
@@ -35,6 +45,18 @@ func (s *Handler) CreateSession(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+// CheckSession
+//
+// @Summary      Check session status
+// @Description  Returns the current status of a session by UUID.
+// @Tags         sessions
+// @Accept       json
+// @Produce      json
+// @Param        request body domain.SessionCheckRequest true "Session UUID"
+// @Success      200 {string} string "pending"
+// @Failure      400
+// @Failure      500
+// @Router       /api/v1/auth/telegram/status [get]
 func (s *Handler) CheckSession(w http.ResponseWriter, r *http.Request) {
 	var req domain.SessionCheckRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -61,6 +83,17 @@ func (s *Handler) CheckSession(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GenerateAllJWTTokens
+//
+// @Summary      generate refresh, access jwt tokens
+// @Tags         sessions
+// @Accept       json
+// @Produce      json
+// @Param        request body domain.SessionCheckRequest true "Session UUID"
+// @Success      200 {string} domain.Tokens
+// @Failure      400
+// @Failure      500
+// @Router       /api/v1/auth/telegram/tokens [post]
 func (s *Handler) GenerateAllJWTTokens(w http.ResponseWriter, r *http.Request) {
 	var req domain.SessionCheckRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -115,6 +148,16 @@ func (s *Handler) GenerateAllJWTTokens(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetAccessToken
+//
+// @Summary      generate and get access token if refresh valid
+// @Tags         sessions
+// @Accept       json
+// @Produce      json
+// @Success      200 {string} domain.Tokens
+// @Failure      400
+// @Failure      500
+// @Router       /api/v1/auth/telegram/access [post]
 func (s *Handler) GetAccessToken(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	cookie, err := r.Cookie("refresh_token")

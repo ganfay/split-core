@@ -139,7 +139,7 @@ func (h *BotHandler) MyFundMenu(c tele.Context, offset int) *tele.ReplyMarkup {
 		return &menu
 	}
 	defer save()
-	fundsMembers, err := h.fundUC.GetByUserID(ctx, userCtx.InternalID, limit, offset)
+	fundsMembers, err := h.fundUC.GetFundsByUserID(ctx, userCtx.InternalID, limit, offset)
 	if err != nil {
 		err := h.error(c, "Failed to get your funds", err.Error(), Edit)
 		if err != nil {

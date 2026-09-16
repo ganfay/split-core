@@ -16,14 +16,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-  app:
+  web:
     build:
       context: .
-      dockerfile: split-core/Dockerfile
-    container_name: split_core_app
+      dockerfile: backend/Dockerfile.web
+    container_name: split_core_web
     restart: always
     env_file:
-      - split-core/.env
+      - backend/.env
     ports:
       - "8080:8080"
     depends_on:
@@ -34,7 +34,42 @@ services:
       rabbitmq:
         condition: service_started
     volumes:
-      - ${PROJECT_ROOT}/split-core/out:/app/out
+      - ${PROJECT_ROOT}/split-core/out/web:/app/out
+    user: "${UID}:${GID}"
+    environment:
+      TOKEN: ${TOKEN}
+      BOT_NAME: ${BOT_NAME}
+      BOT_VER: ${BOT_VER}
+      PG_USER: ${PG_USER}
+      PG_PASS: ${PG_PASS}
+      PG_DB: ${PG_DB}
+      ENV: ${ENV:-local}
+
+      PG_HOST: db
+      REDIS_HOST: redis
+
+      PG_PORT: ${PG_PORT}
+      REDIS_PORT: ${REDIS_PORT}
+      RMQ_PASS: ${RMQ_PASS}
+      RMQ_USER: ${RMQ_USER}
+      GRPC_PORT: ${GRPC_PORT}
+  bot:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.bot
+    container_name: split_core_app
+    restart: always
+    env_file:
+      - backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_started
+    volumes:
+      - ${PROJECT_ROOT}/split-core/out/bot:/app/out
     user: "${UID}:${GID}"
     environment:
       TOKEN: ${TOKEN}
@@ -76,7 +111,7 @@ services:
     container_name: split_notify
     build:
       context: .
-      dockerfile: split-notify/Dockerfile
+      dockerfile: notifier/Dockerfile
     depends_on:
       rabbitmq:
         condition: service_started

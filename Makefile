@@ -1,4 +1,4 @@
-include split-core/.env
+include backend/.env
 export
 
 export PROJECT_ROOT=$(shell pwd)
@@ -68,7 +68,8 @@ proto-generate:
 	@cd proto && protoc --go_out=. --go-grpc_out=. notification.proto
 
 run-services:
-	@mkdir -p "split-core/out/logs"
+	@mkdir -p "backend/out/bot"
+	@mkdir -p "backend/out/web"
 	@docker compose up -d --build
 
 dev-rerun:

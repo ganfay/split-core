@@ -20,8 +20,8 @@ Users create "Funds", invite friends via unique deep-links, and record their exp
 
 To ensure high performance and zero blockage of the main Telegram Bot long-polling loop, the system is decoupled into two independent services communicating via **Event-Driven** and **RPC** patterns:
 
-1. **`split-core` (The Core Engine):** Handles database transactions, state management (FSM), greedy algorithms, and Telegram API interaction.
-2. **`split-notify` (The Background Worker):** An asynchronous service that consumes events, formats personalized HTML alerts, and orchestrates notifications.
+1. **`backend` (The Core Engine):** Handles database transactions, state management (FSM), greedy algorithms, and Telegram API interaction.
+2. **`notifier` (The Background Worker):** An asynchronous service that consumes events, formats personalized HTML alerts, and orchestrates notifications.
 
 ```text
   [ Telegram Bot User ]
@@ -41,12 +41,12 @@ To ensure high performance and zero blockage of the main Telegram Bot long-polli
 ```
 
 ### 🔄 The Async Notification Lifecycle:
-1. A user logs a new expense in `split-core`.
-2. `split-core` saves the data to **PostgreSQL** and immediately publishes an `expense_created` JSON event to a **RabbitMQ** queue.
-3. The background worker `split-notify` consumes the event.
-4. `split-notify` lacks user details, so it makes a synchronous **gRPC** request back to `split-core` to fetch the target users (excluding the expense creator).
-5. `split-notify` generates beautiful, personalized HTML-formatted notification templates.
-6. `split-notify` calls `split-core`'s gRPC server to dispatch the parsed messages back to Telegram asynchronously, keeping the main bot thread perfectly responsive.
+1. A user logs a new expense in `backend`.
+2. `backend` saves the data to **PostgreSQL** and immediately publishes an `expense_created` JSON event to a **RabbitMQ** queue.
+3. The background worker `notifier` consumes the event.
+4. `notifier` lacks user details, so it makes a synchronous **gRPC** request back to `backend` to fetch the target users (excluding the expense creator).
+5. `notifier` generates beautiful, personalized HTML-formatted notification templates.
+6. `notifier` calls `backend`'s gRPC server to dispatch the parsed messages back to Telegram asynchronously, keeping the main bot thread perfectly responsive.
 
 ---
 
@@ -110,7 +110,7 @@ SplitCore/ (Repository Root)
    ```
 3. **Initialize the Go Workspace locally (Optional, for IDE support):**
    ```bash
-   go work init ./split-core ./split-notify ./proto
+   go work init ./split-core ./notifier ./proto
    ```
 4. **Start the infrastructure services (Postgres, Redis, RabbitMQ):**
    ```bash

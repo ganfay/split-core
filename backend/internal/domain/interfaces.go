@@ -7,11 +7,10 @@ import (
 type FundUsecase interface {
 	GetBalance(ctx context.Context, fundID int) (*Settlement, error)
 	AddExpense(ctx context.Context, fundID int, id int64, desc string, cost float64) error
-
 	CreateFund(ctx context.Context, fund *Fund) (*Fund, error)
 	DeleteFund(ctx context.Context, fundID int, IID int64) error
 	GetInfo(ctx context.Context, reqFund *Fund) (*Fund, error)
-	GetByUserID(ctx context.Context, IID int64, limit int, offset int) ([]Fund, error)
+	GetFundsByUserID(ctx context.Context, IID int64, limit int, offset int) ([]Fund, error)
 	AddMember(ctx context.Context, fundID int, IID int64) error
 	IsMember(ctx context.Context, fundID int, IID int64) (bool, error)
 	GetMembers(ctx context.Context, fundID int) ([]User, error)

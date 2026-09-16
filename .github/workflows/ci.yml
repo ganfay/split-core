@@ -26,17 +26,17 @@ jobs:
           version: latest
           working-directory: ./split-core
 
-      - name: Run golangci-lint (split-notify)
+      - name: Run golangci-lint (notifier)
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
-          working-directory: ./split-notify
+          working-directory: ./notifier
 
       - name: Run Tests (split-core)
         working-directory: ./split-core
         run: go test -v ./...
 
 
-    # - name: Run Tests (split-notify)
-    #   working-directory: ./split-notify
+    # - name: Run Tests (notifier)
+    #   working-directory: ./notifier
     #   run: go test -v ./...

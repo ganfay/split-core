@@ -151,7 +151,7 @@ func (u *FundUsecase) GetInfo(ctx context.Context, reqFund *domain.Fund) (*domai
 	return u.fundRepository.GetInfo(ctx, reqFund)
 }
 
-func (u *FundUsecase) GetByUserID(ctx context.Context, userID int64, limit int, offset int) ([]domain.Fund, error) {
+func (u *FundUsecase) GetFundsByUserID(ctx context.Context, userID int64, limit int, offset int) ([]domain.Fund, error) {
 	return u.fundRepository.GetByUserID(ctx, userID, limit, offset)
 }
 

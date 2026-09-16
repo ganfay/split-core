@@ -5,7 +5,7 @@ type PingResponse struct {
 }
 
 type SessionCheckRequest struct {
-	Uuid string `json:"uuid"`
+	Uuid string `json:"uuid" example:"550e8400-e29b-41d4-a716-446655440000"`
 }
 
 type Session struct {

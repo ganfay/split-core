@@ -1,0 +1,196 @@
+basePath: /
+definitions:
+  domain.Fund:
+    properties:
+      authorID:
+        format: int64
+        type: integer
+      createdAt:
+        type: string
+      id:
+        type: integer
+      inviteCode:
+        type: string
+      name:
+        type: string
+    type: object
+  domain.Pagination:
+    properties:
+      limit:
+        type: integer
+      offset:
+        type: integer
+    type: object
+  domain.SessionCheckRequest:
+    properties:
+      uuid:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API documentation for my application.
+  title: My API
+  version: "1.0"
+paths:
+  /api/v1/auth/telegram/access:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: generate and get access token if refresh valid
+      tags:
+      - sessions
+  /api/v1/auth/telegram/init:
+    post:
+      consumes:
+      - application/json
+      description: Returns UUID.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+      summary: Create session
+      tags:
+      - sessions
+  /api/v1/auth/telegram/status:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current status of a session by UUID.
+      parameters:
+      - description: Session UUID
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SessionCheckRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: pending
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: Check session status
+      tags:
+      - sessions
+  /api/v1/auth/telegram/tokens:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Session UUID
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SessionCheckRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: generate refresh, access jwt tokens
+      tags:
+      - sessions
+  /api/v1/fund:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - description: Only fund id must be here
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.Fund'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: delete fund
+      tags:
+      - fund
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Only fund id must be here
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.Pagination'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: getfunds by useriid
+      tags:
+      - fund
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Only fund name must be here
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.Fund'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: create fund
+      tags:
+      - fund
+swagger: "2.0"
