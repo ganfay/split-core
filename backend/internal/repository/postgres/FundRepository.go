@@ -33,7 +33,7 @@ func (r *FundRepository) CreateFund(ctx context.Context, fund *domain.Fund) (*do
 		}
 	}()
 
-	err = r.DB.QueryRow(ctx, `INSERT INTO app.funds
+	err = tx.QueryRow(ctx, `INSERT INTO app.funds
     (name, author_id, invite_code) 
 	VALUES ($1, $2, $3) 
 	ON CONFLICT DO NOTHING

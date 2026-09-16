@@ -4,13 +4,13 @@ WORKDIR /src
 
 COPY proto/ ./proto/
 
-COPY split-notify/go.mod split-notify/go.sum ./split-notify/
+COPY notifier/go.mod notifier/go.sum ./notifier/
 
-WORKDIR /src/split-notify
+WORKDIR /src/notifier
 
 RUN go mod download
 
-COPY split-notify/ .
+COPY notifier/ .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/notify ./cmd/main.go
 

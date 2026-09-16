@@ -4,13 +4,13 @@ WORKDIR /src
 
 COPY proto/ ./proto/
 
-COPY split-core/go.mod split-core/go.sum ./split-core/
+COPY backend/go.mod backend/go.sum ./backend/
 
-WORKDIR /src/split-core
+WORKDIR /src/backend
 
 RUN go mod download
 
-COPY split-core/ .
+COPY backend/ .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/web ./cmd/web/main.go
 

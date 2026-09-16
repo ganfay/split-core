@@ -9,3 +9,5 @@ split-core/out
 backend/.env
 bot
 
+frontend/node_modules
+frontend/dist

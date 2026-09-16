@@ -55,8 +55,8 @@ func (r *UserRepository) CreateVirtualUser(ctx context.Context, firstName string
 func (r *UserRepository) GetUserByIID(ctx context.Context, iID int64) (*domain.User, error) {
 	var u domain.User
 	query := `
-SELECT tg_id, username, first_name, is_virtual, created_at FROM app.users WHERE id = $1`
-	err := r.DB.QueryRow(ctx, query, iID).Scan(&u.TgID, &u.Username, &u.FirstName, &u.IsVirtual, &u.CreatedAt)
+SELECT id, tg_id, username, first_name, is_virtual, created_at FROM app.users WHERE id = $1`
+	err := r.DB.QueryRow(ctx, query, iID).Scan(&u.ID, &u.TgID, &u.Username, &u.FirstName, &u.IsVirtual, &u.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

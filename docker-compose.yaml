@@ -1,4 +1,17 @@
 services:
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_BOT_NAME: ${BOT_NAME}
+    container_name: split_core_frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      web:
+        condition: service_started
   db:
     image: postgres:18.3-bookworm
     container_name: split_core_db
@@ -34,7 +47,7 @@ services:
       rabbitmq:
         condition: service_started
     volumes:
-      - ${PROJECT_ROOT}/split-core/out/web:/app/out
+      - ${PROJECT_ROOT}/backend/out/web:/app/out
     user: "${UID}:${GID}"
     environment:
       TOKEN: ${TOKEN}
@@ -69,7 +82,7 @@ services:
       rabbitmq:
         condition: service_started
     volumes:
-      - ${PROJECT_ROOT}/split-core/out/bot:/app/out
+      - ${PROJECT_ROOT}/backend/out/bot:/app/out
     user: "${UID}:${GID}"
     environment:
       TOKEN: ${TOKEN}
@@ -109,6 +122,7 @@ services:
       --appendonly yes
   split-notify:
     container_name: split_notify
+    restart: always
     build:
       context: .
       dockerfile: notifier/Dockerfile

@@ -57,6 +57,7 @@ func (s *Handler) CreateSession(w http.ResponseWriter, _ *http.Request) {
 // @Failure      400
 // @Failure      500
 // @Router       /api/v1/auth/telegram/status [get]
+// @Router       /api/v1/auth/telegram/status [post]
 func (s *Handler) CheckSession(w http.ResponseWriter, r *http.Request) {
 	var req domain.SessionCheckRequest
 	err := json.NewDecoder(r.Body).Decode(&req)

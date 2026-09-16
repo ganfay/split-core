@@ -1,24 +1,101 @@
 basePath: /
 definitions:
+  domain.Debt:
+    properties:
+      amount:
+        example: 50.25
+        type: number
+      from_id:
+        example: 2
+        type: integer
+      to_id:
+        example: 1
+        type: integer
+    type: object
   domain.Fund:
     properties:
-      authorID:
-        format: int64
+      author_id:
+        example: 1
         type: integer
-      createdAt:
+      created_at:
         type: string
       id:
+        example: 1
         type: integer
-      inviteCode:
+      invite_code:
+        example: aB12cD
         type: string
       name:
+        example: Trip to Paris
+        type: string
+    type: object
+  domain.FundPaginationRequest:
+    properties:
+      fund_id:
+        example: 1
+        type: integer
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+    type: object
+  domain.FundRequest:
+    properties:
+      id:
+        example: 1
+        type: integer
+      invite_code:
+        example: aB12cD
+        type: string
+    type: object
+  domain.JoinFundRequest:
+    properties:
+      invite_code:
+        example: aB12cD
         type: string
     type: object
   domain.Pagination:
     properties:
       limit:
+        example: 20
         type: integer
       offset:
+        example: 0
+        type: integer
+    type: object
+  domain.PingResponse:
+    properties:
+      pong:
+        type: boolean
+    type: object
+  domain.Purchase:
+    properties:
+      amount:
+        example: 150.5
+        type: number
+      created_at:
+        type: string
+      description:
+        example: Taxi to hotel
+        type: string
+      fund_id:
+        example: 1
+        type: integer
+      id:
+        example: 1
+        type: integer
+      payer:
+        $ref: '#/definitions/domain.User'
+    type: object
+  domain.RemoveUserRequest:
+    properties:
+      fund_id:
+        example: 1
+        type: integer
+      user_id:
+        example: 2
         type: integer
     type: object
   domain.SessionCheckRequest:
@@ -26,6 +103,60 @@ definitions:
       uuid:
         example: 550e8400-e29b-41d4-a716-446655440000
         type: string
+    type: object
+  domain.SettleFund:
+    properties:
+      cost:
+        example: 150.5
+        type: number
+      description:
+        example: Taxi to hotel
+        type: string
+      fund_id:
+        example: 1
+        type: integer
+    type: object
+  domain.Settlement:
+    properties:
+      average:
+        example: 150.5
+        type: number
+      debts:
+        items:
+          $ref: '#/definitions/domain.Debt'
+        type: array
+      total_amount:
+        example: 451.5
+        type: number
+    type: object
+  domain.User:
+    properties:
+      created_at:
+        type: string
+      first_name:
+        example: Alex
+        type: string
+      id:
+        example: 1
+        type: integer
+      is_virtual:
+        example: false
+        type: boolean
+      tg_id:
+        example: 123456789
+        type: integer
+      username:
+        example: ganfay
+        type: string
+    type: object
+  domain.VirtualUserRequest:
+    properties:
+      first_name:
+        example: Alex
+        type: string
+      fund_id:
+        example: 1
+        type: integer
     type: object
 host: localhost:8080
 info:
@@ -136,10 +267,10 @@ paths:
       responses:
         "204":
           description: No Content
-          schema:
-            type: string
         "400":
           description: Bad Request
+        "401":
+          description: Unauthorized
         "500":
           description: Internal Server Error
       summary: delete fund
@@ -149,7 +280,7 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: Only fund id must be here
+      - description: Pagination
         in: body
         name: request
         required: true
@@ -161,12 +292,16 @@ paths:
         "200":
           description: OK
           schema:
-            type: string
+            items:
+              $ref: '#/definitions/domain.Fund'
+            type: array
         "400":
           description: Bad Request
+        "401":
+          description: Unauthorized
         "500":
           description: Internal Server Error
-      summary: getfunds by useriid
+      summary: get funds by current user iid
       tags:
       - fund
     post:
@@ -185,12 +320,274 @@ paths:
         "200":
           description: OK
           schema:
-            type: string
+            $ref: '#/definitions/domain.Fund'
         "400":
           description: Bad Request
+        "401":
+          description: Unauthorized
         "500":
           description: Internal Server Error
       summary: create fund
+      tags:
+      - fund
+  /api/v1/fund/balance:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Fund id
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.FundRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Settlement'
+        "400":
+          description: Bad Request
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      summary: get fund settlement
+      tags:
+      - fund
+  /api/v1/fund/expense:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Expense data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SettleFund'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      summary: add expense to fund
+      tags:
+      - fund
+  /api/v1/fund/info:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Fund id or invite code
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.FundRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Fund'
+        "400":
+          description: Bad Request
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      summary: get fund info
+      tags:
+      - fund
+  /api/v1/fund/join:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Invite code
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.JoinFundRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Fund'
+        "400":
+          description: Bad Request
+        "401":
+          description: Unauthorized
+        "500":
+          description: Internal Server Error
+      summary: join fund by invite code
+      tags:
+      - fund
+  /api/v1/fund/member:
+    delete:
+      consumes:
+      - application/json
+      parameters:
+      - description: Fund id and user id
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.RemoveUserRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      summary: remove user from fund
+      tags:
+      - fund
+  /api/v1/fund/members:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Fund id
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.FundRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.User'
+            type: array
+        "400":
+          description: Bad Request
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      summary: get fund members
+      tags:
+      - fund
+  /api/v1/fund/purchases:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Fund id and pagination
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.FundPaginationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.Purchase'
+            type: array
+        "400":
+          description: Bad Request
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      summary: get fund purchase history
+      tags:
+      - fund
+  /api/v1/fund/virtual-users:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Fund id and pagination
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.FundPaginationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.User'
+            type: array
+        "400":
+          description: Bad Request
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      summary: get virtual fund members
+      tags:
+      - fund
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Virtual user data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.VirtualUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.User'
+        "400":
+          description: Bad Request
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      summary: create and add virtual user to fund
+      tags:
+      - fund
+  /api/v1/ping:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.PingResponse'
+        "500":
+          description: Internal Server Error
+      summary: ping
       tags:
       - fund
 swagger: "2.0"

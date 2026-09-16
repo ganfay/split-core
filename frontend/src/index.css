@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #f7f2ea;
+  background: #101418;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background:
+    linear-gradient(120deg, rgba(111, 231, 194, 0.1), transparent 28%),
+    linear-gradient(245deg, rgba(255, 122, 107, 0.11), transparent 30%),
+    #101418;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+::selection {
+  color: #101418;
+  background: #6fe7c2;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background:
+    linear-gradient(rgba(247, 242, 234, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(247, 242, 234, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.panel {
+  border: 1px solid rgba(247, 242, 234, 0.11);
+  background: rgba(21, 26, 31, 0.82);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(18px);
+}
+
+.surface {
+  border: 1px solid rgba(247, 242, 234, 0.1);
+  background: rgba(247, 242, 234, 0.055);
+}
+
+.focus-ring {
+  outline: none;
+}
+
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 3px rgba(111, 231, 194, 0.35);
+}

@@ -159,10 +159,10 @@ const docTemplate = `{
                 "tags": [
                     "fund"
                 ],
-                "summary": "getfunds by useriid",
+                "summary": "get funds by current user iid",
                 "parameters": [
                     {
-                        "description": "Only fund id must be here",
+                        "description": "Pagination",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -175,11 +175,17 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "string"
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.Fund"
+                            }
                         }
                     },
                     "400": {
                         "description": "Bad Request"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
                     },
                     "500": {
                         "description": "Internal Server Error"
@@ -212,11 +218,14 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/domain.Fund"
                         }
                     },
                     "400": {
                         "description": "Bad Request"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
                     },
                     "500": {
                         "description": "Internal Server Error"
@@ -247,13 +256,417 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "204": {
-                        "description": "No Content",
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v1/fund/balance": {
+            "get": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fund"
+                ],
+                "summary": "get fund settlement",
+                "parameters": [
+                    {
+                        "description": "Fund id",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/domain.FundRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Settlement"
                         }
                     },
                     "400": {
                         "description": "Bad Request"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v1/fund/expense": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fund"
+                ],
+                "summary": "add expense to fund",
+                "parameters": [
+                    {
+                        "description": "Expense data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.SettleFund"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v1/fund/info": {
+            "get": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fund"
+                ],
+                "summary": "get fund info",
+                "parameters": [
+                    {
+                        "description": "Fund id or invite code",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.FundRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Fund"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v1/fund/join": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fund"
+                ],
+                "summary": "join fund by invite code",
+                "parameters": [
+                    {
+                        "description": "Invite code",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.JoinFundRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Fund"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v1/fund/member": {
+            "delete": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fund"
+                ],
+                "summary": "remove user from fund",
+                "parameters": [
+                    {
+                        "description": "Fund id and user id",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.RemoveUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v1/fund/members": {
+            "get": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fund"
+                ],
+                "summary": "get fund members",
+                "parameters": [
+                    {
+                        "description": "Fund id",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.FundRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.User"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v1/fund/purchases": {
+            "get": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fund"
+                ],
+                "summary": "get fund purchase history",
+                "parameters": [
+                    {
+                        "description": "Fund id and pagination",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.FundPaginationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.Purchase"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v1/fund/virtual-users": {
+            "get": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fund"
+                ],
+                "summary": "get virtual fund members",
+                "parameters": [
+                    {
+                        "description": "Fund id and pagination",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.FundPaginationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.User"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fund"
+                ],
+                "summary": "create and add virtual user to fund",
+                "parameters": [
+                    {
+                        "description": "Virtual user data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.VirtualUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.User"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/api/v1/ping": {
+            "get": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fund"
+                ],
+                "summary": "ping",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.PingResponse"
+                        }
                     },
                     "500": {
                         "description": "Internal Server Error"
@@ -263,24 +676,83 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "domain.Debt": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number",
+                    "example": 50.25
+                },
+                "from_id": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "to_id": {
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
         "domain.Fund": {
             "type": "object",
             "properties": {
-                "authorID": {
+                "author_id": {
                     "type": "integer",
-                    "format": "int64"
+                    "example": 1
                 },
-                "createdAt": {
+                "created_at": {
                     "type": "string"
                 },
                 "id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 1
                 },
-                "inviteCode": {
-                    "type": "string"
+                "invite_code": {
+                    "type": "string",
+                    "example": "aB12cD"
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Trip to Paris"
+                }
+            }
+        },
+        "domain.FundPaginationRequest": {
+            "type": "object",
+            "properties": {
+                "fund_id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                }
+            }
+        },
+        "domain.FundRequest": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "invite_code": {
+                    "type": "string",
+                    "example": "aB12cD"
+                }
+            }
+        },
+        "domain.JoinFundRequest": {
+            "type": "object",
+            "properties": {
+                "invite_code": {
+                    "type": "string",
+                    "example": "aB12cD"
                 }
             }
         },
@@ -288,10 +760,60 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "limit": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 20
                 },
                 "offset": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 0
+                }
+            }
+        },
+        "domain.PingResponse": {
+            "type": "object",
+            "properties": {
+                "pong": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "domain.Purchase": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number",
+                    "example": 150.5
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string",
+                    "example": "Taxi to hotel"
+                },
+                "fund_id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "payer": {
+                    "$ref": "#/definitions/domain.User"
+                }
+            }
+        },
+        "domain.RemoveUserRequest": {
+            "type": "object",
+            "properties": {
+                "fund_id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "user_id": {
+                    "type": "integer",
+                    "example": 2
                 }
             }
         },
@@ -301,6 +823,83 @@ const docTemplate = `{
                 "uuid": {
                     "type": "string",
                     "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
+        "domain.SettleFund": {
+            "type": "object",
+            "properties": {
+                "cost": {
+                    "type": "number",
+                    "example": 150.5
+                },
+                "description": {
+                    "type": "string",
+                    "example": "Taxi to hotel"
+                },
+                "fund_id": {
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "domain.Settlement": {
+            "type": "object",
+            "properties": {
+                "average": {
+                    "type": "number",
+                    "example": 150.5
+                },
+                "debts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.Debt"
+                    }
+                },
+                "total_amount": {
+                    "type": "number",
+                    "example": 451.5
+                }
+            }
+        },
+        "domain.User": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string",
+                    "example": "Alex"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "is_virtual": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "tg_id": {
+                    "type": "integer",
+                    "example": 123456789
+                },
+                "username": {
+                    "type": "string",
+                    "example": "ganfay"
+                }
+            }
+        },
+        "domain.VirtualUserRequest": {
+            "type": "object",
+            "properties": {
+                "first_name": {
+                    "type": "string",
+                    "example": "Alex"
+                },
+                "fund_id": {
+                    "type": "integer",
+                    "example": 1
                 }
             }
         }
