@@ -24,10 +24,11 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, authStore } from "./api/client";
 import type { Debt, Fund, Purchase, Settlement, User } from "./api/types";
 import { displayUser, fullDateTime, money, shortDate } from "./lib/format";
+
 
 const botName = import.meta.env.VITE_BOT_NAME || "SplitCoreBot";
 
@@ -88,7 +89,7 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
-
+  const authPopupRef = useRef<Window | null>(null);
   // Sync theme class to documentElement
   useEffect(() => {
     if (theme === "light") {
@@ -222,47 +223,75 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!sessionID || status !== "pending") return;
-    const timer = window.setInterval(async () => {
-      try {
-        const nextStatus = await api.checkSession(sessionID);
-        setStatus(nextStatus);
-        if (nextStatus === "authenticated") {
-          const tokens = await api.generateTokens(sessionID);
-          authStore.setToken(tokens.access_token);
-          setToken(tokens.access_token);
-          api.getMe(tokens.access_token)
-            .then((u) => {
-              if (u) {
-                setCurrentUser(u);
-                authStore.setUser(u);
-              }
-            })
-            .catch(() => {});
-          toast("success", "Telegram connected!");
-          window.clearInterval(timer);
-        }
-      } catch (err) {
-        toast("error", err instanceof Error ? err.message : "Auth check failed");
-      }
-    }, 2200);
-    return () => window.clearInterval(timer);
-  }, [sessionID, status]);
+    useEffect(() => {
+        if (!sessionID || status !== "pending") return;
+        const timer = window.setInterval(async () => {
+            try {
+                const nextStatus = await api.checkSession(sessionID);
+                setStatus(nextStatus);
+                if (nextStatus === "authenticated") {
+                    // Автоматически закрываем всплывающее окно Telegram!
+                    if (authPopupRef.current && !authPopupRef.current.closed) {
+                        authPopupRef.current.close();
+                        authPopupRef.current = null;
+                    }
 
-  async function startTelegramAuth() {
-    setBusy(true);
-    try {
-      const session = await api.createSession();
-      setSessionID(session.uuid);
-      setStatus(session.status);
-      window.open(telegramLink(session.uuid), "_blank", "noopener,noreferrer");
-    } catch (err) {
-      toast("error", err instanceof Error ? err.message : "Failed to start auth");
-    } finally {
-      setBusy(false);
+                    const tokens = await api.generateTokens(sessionID);
+                    authStore.setToken(tokens.access_token);
+                    setToken(tokens.access_token);
+                    api.getMe(tokens.access_token)
+                        .then((u) => {
+                            if (u) {
+                                setCurrentUser(u);
+                                authStore.setUser(u);
+                            }
+                        })
+                        .catch(() => {});
+                    toast("success", "Telegram connected!");
+                    window.clearInterval(timer);
+                }
+            } catch (err) {
+                toast("error", err instanceof Error ? err.message : "Auth check failed");
+            }
+        }, 2200);
+        return () => window.clearInterval(timer);
+    }, [sessionID, status]);
+
+    async function startTelegramAuth() {
+        setBusy(true);
+        try {
+            const session = await api.createSession();
+            setSessionID(session.uuid);
+            setStatus(session.status);
+
+            const tgWebUrl = telegramLink(session.uuid);
+            const tgAppUrl = `tg://resolve?domain=${botName}&start=auth_${session.uuid}`;
+
+            // 1. Пытаемся сразу стригерить Telegram Desktop / Mobile без перехода во вкладки
+            const iframe = document.createElement("iframe");
+            iframe.style.display = "none";
+            iframe.src = tgAppUrl;
+            document.body.appendChild(iframe);
+            setTimeout(() => iframe.remove(), 2000);
+
+            // 2. Открываем компактный popup (без noopener, чтобы закрыть его по завершению)
+            const width = 540;
+            const height = 670;
+            const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);
+            const top = window.screenY + Math.max(0, (window.outerHeight - height) / 2);
+
+            const popup = window.open(
+                tgWebUrl,
+                "SplitCoreTelegramAuth",
+                `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
+            );
+            authPopupRef.current = popup;
+        } catch (err) {
+            toast("error", err instanceof Error ? err.message : "Failed to start auth");
+        } finally {
+            setBusy(false);
+        }
     }
-  }
 
   async function submitCreateFund(event: FormEvent<HTMLFormElement>) {
       event.preventDefault();
@@ -403,7 +432,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-sc-bg text-sc-text font-sans antialiased">
+    <div className="min-h-screen text-sc-text font-sans antialiased">
       {/* Toast stack */}
       <div className="fixed bottom-6 right-4 left-4 sm:left-auto sm:right-6 z-50 flex flex-col gap-2 items-end pointer-events-none">
         {toasts.map((t) => (
@@ -458,7 +487,7 @@ function App() {
       ) : (
         <div className="flex flex-col min-h-screen">
           {/* Navbar */}
-          <header className="sticky top-0 z-30 border-b border-sc-border bg-sc-bg/80 backdrop-blur-xl">
+          <header className="sticky top-0 z-30 border-b border-sc-border backdrop-blur-xl" style={{ background: "var(--sc-header-bg)" }}>
             <div className="mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <img src="/logo.png" alt="SplitCore" className="size-9 object-contain flex-shrink-0" />
