@@ -14,7 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func Initial(ctx context.Context, cfg *config.Config) (*usecase.FundUsecase, *usecase.UserUsecase, *usecase.StatesUsecase, *pgxpool.Pool, *redis.Client) {
+func Initial(ctx context.Context, cfg *config.Config) (*usecase.FundUsecase, *usecase.UserUsecase, *usecase.StatesUsecase, *pgxpool.Pool, *redis.Client, *rabbitmq.Publisher) {
 	pool, err := postgres.NewPostgresPool(ctx, cfg.Postgres.URL())
 	if err != nil {
 		slog.Error("Error connecting to database", "err", err)
@@ -34,10 +34,9 @@ func Initial(ctx context.Context, cfg *config.Config) (*usecase.FundUsecase, *us
 		slog.Error("Error creating publisher", "err", err)
 		os.Exit(1)
 	}
-	defer publisher.Close()
 
 	fundUC := usecase.NewFundUsecase(fundRepository, purchaseRepository, publisher)
 	userUC := usecase.NewUserUsecase(userRepository)
 	stateUC := usecase.NewStateUsecase(StateRepository)
-	return fundUC, userUC, stateUC, pool, rdb
+	return fundUC, userUC, stateUC, pool, rdb, publisher
 }

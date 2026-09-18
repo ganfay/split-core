@@ -28,7 +28,7 @@ func main() {
 
 	logger.SetupLogger(cfg.Env)
 
-	fundUC, userUC, stateUC, pool, rdb := helper.Initial(ctx, cfg)
+	fundUC, userUC, stateUC, pool, rdb, publisher := helper.Initial(ctx, cfg)
 
 	mux := http.NewServeMux()
 	v1Handlers := v1.NewHandler(fundUC, userUC, stateUC)
@@ -52,6 +52,7 @@ func main() {
 		slog.Error("Error stopping web server", "err", err)
 	}
 	pool.Close()
+	publisher.Close()
 	err = rdb.Close()
 	if err != nil {
 		panic("Failed to close the redis database: " + err.Error())

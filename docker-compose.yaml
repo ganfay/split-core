@@ -1,5 +1,6 @@
 services:
   frontend:
+    image: ghcr.io/ganfay/split-core/frontend:latest
     build:
       context: .
       dockerfile: frontend/Dockerfile
@@ -9,6 +10,8 @@ services:
     restart: always
     ports:
       - "3000:80"
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       web:
         condition: service_started
@@ -30,6 +33,7 @@ services:
       timeout: 5s
       retries: 5
   web:
+    image: ghcr.io/ganfay/split-core/web:latest
     build:
       context: .
       dockerfile: backend/Dockerfile.web
@@ -67,6 +71,7 @@ services:
       RMQ_USER: ${RMQ_USER}
       GRPC_PORT: ${GRPC_PORT}
   bot:
+    image: ghcr.io/ganfay/split-core/bot:latest
     build:
       context: .
       dockerfile: backend/Dockerfile.bot
@@ -121,6 +126,7 @@ services:
       --requirepass ${REDIS_PASS}
       --appendonly yes
   split-notify:
+    image: ghcr.io/ganfay/split-core/notify:latest
     container_name: split_notify
     restart: always
     build:

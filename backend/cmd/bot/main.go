@@ -28,7 +28,7 @@ func main() {
 		Poller: &tele.LongPoller{Timeout: 10 * time.Second},
 	}
 
-	fundUC, userUC, stateUC, pool, rdb := helper.Initial(ctx, cfg)
+	fundUC, userUC, stateUC, pool, rdb, publisher := helper.Initial(ctx, cfg)
 
 	h := telegram.NewBotHandler(fundUC, userUC, stateUC)
 
@@ -62,6 +62,7 @@ func main() {
 	}
 	b.Stop()
 	pool.Close()
+	publisher.Close()
 	err = rdb.Close()
 	if err != nil {
 		panic("Failed to close the redis database: " + err.Error())
