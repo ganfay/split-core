@@ -2,6 +2,8 @@ import {
   ArrowRight,
   BadgeDollarSign,
   BanknoteArrowUp,
+  CheckCircle,
+  ChevronRight,
   Copy,
   LogOut,
   Plus,
@@ -11,14 +13,14 @@ import {
   Sparkles,
   Trash2,
   UserPlus,
-  Users
+  Users,
+  Wallet,
+  X,
+  XCircle,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api, authStore } from "./api/client";
 import type { Debt, Fund, Purchase, Settlement, User } from "./api/types";
-import { Button } from "./components/Button";
-import { Metric } from "./components/Metric";
-import { TextInput } from "./components/TextInput";
 import { displayUser, money, shortDate } from "./lib/format";
 
 const botName = import.meta.env.VITE_BOT_NAME || "SplitCoreBot";
@@ -30,42 +32,61 @@ type FundDetails = {
   purchases: Purchase[];
 };
 
+type Toast = {
+  id: number;
+  type: "success" | "error";
+  message: string;
+};
+
+// ─── Utility ────────────────────────────────────────────────────────────────
+
+function telegramLink(uuid: string) {
+  return `https://t.me/${botName}?start=auth_${uuid}`;
+}
+
+let toastCounter = 0;
+
+// ─── App ─────────────────────────────────────────────────────────────────────
+
 function App() {
   const [token, setToken] = useState(() => authStore.getToken());
   const [funds, setFunds] = useState<Fund[]>([]);
   const [activeFundID, setActiveFundID] = useState<number | null>(null);
-  const [details, setDetails] = useState<FundDetails>({
-    members: [],
-    purchases: []
-  });
+  const [details, setDetails] = useState<FundDetails>({ members: [], purchases: [] });
   const [sessionID, setSessionID] = useState("");
   const [status, setStatus] = useState("idle");
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
 
-  const activeFund = details.fund ?? funds.find((fund) => fund.id === activeFundID);
+  const activeFund = details.fund ?? funds.find((f) => f.id === activeFundID);
   const totalMembers = details.members.length;
   const totalSpent = details.settlement?.total_amount ?? 0;
   const average = details.settlement?.average ?? 0;
 
   const debtRows = useMemo(() => {
-    const byID = new Map(details.members.map((member) => [member.id, member]));
+    const byID = new Map(details.members.map((m) => [m.id, m]));
     return (details.settlement?.debts ?? []).map((debt) => ({
       ...debt,
       from: displayUser(byID.get(debt.from_id)),
-      to: displayUser(byID.get(debt.to_id))
+      to: displayUser(byID.get(debt.to_id)),
     }));
   }, [details.members, details.settlement]);
 
+  function toast(type: "success" | "error", message: string) {
+    const id = ++toastCounter;
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
+  }
+
   const loadFunds = useCallback(
     async (nextToken = token) => {
-      if (!nextToken) {
-        return;
-      }
+      if (!nextToken) return;
       const list = await api.listFunds(nextToken);
-      setFunds(list);
-      if (!activeFundID && list.length > 0) {
-        setActiveFundID(list[0].id);
+      const safeList = list || [];
+      setFunds(safeList);
+      if (!activeFundID && safeList.length > 0) {
+        setActiveFundID(safeList[0].id);
       }
     },
     [activeFundID, token]
@@ -73,42 +94,34 @@ function App() {
 
   const loadDetails = useCallback(
     async (fundID: number, nextToken = token) => {
-      if (!nextToken) {
-        return;
-      }
+      if (!nextToken) return;
       const [fund, members, settlement, purchases] = await Promise.all([
         api.getFundInfo(nextToken, fundID),
         api.getMembers(nextToken, fundID),
         api.getBalance(nextToken, fundID),
-        api.getPurchases(nextToken, fundID)
+        api.getPurchases(nextToken, fundID),
       ]);
-      setDetails({ fund, members, settlement, purchases });
+      setDetails({ fund, members: members || [], settlement, purchases: purchases || [] });
     },
     [token]
   );
 
   useEffect(() => {
-    if (!token) {
-      return;
-    }
-    loadFunds().catch((error) => {
-      setNotice(error.message);
+    if (!token) return;
+    loadFunds().catch((err) => {
+      toast("error", err.message);
       authStore.clear();
       setToken(null);
     });
   }, [loadFunds, token]);
 
   useEffect(() => {
-    if (!activeFundID || !token) {
-      return;
-    }
-    loadDetails(activeFundID).catch((error) => setNotice(error.message));
+    if (!activeFundID || !token) return;
+    loadDetails(activeFundID).catch((err) => toast("error", err.message));
   }, [activeFundID, loadDetails, token]);
 
   useEffect(() => {
-    if (!sessionID || status !== "pending") {
-      return;
-    }
+    if (!sessionID || status !== "pending") return;
     const timer = window.setInterval(async () => {
       try {
         const nextStatus = await api.checkSession(sessionID);
@@ -117,140 +130,146 @@ function App() {
           const tokens = await api.generateTokens(sessionID);
           authStore.setToken(tokens.access_token);
           setToken(tokens.access_token);
-          setNotice("Telegram account connected");
+          toast("success", "Telegram connected!");
           window.clearInterval(timer);
         }
-      } catch (error) {
-        setNotice(error instanceof Error ? error.message : "Auth check failed");
+      } catch (err) {
+        toast("error", err instanceof Error ? err.message : "Auth check failed");
       }
     }, 2200);
-
     return () => window.clearInterval(timer);
   }, [sessionID, status]);
 
   async function startTelegramAuth() {
     setBusy(true);
-    setNotice("");
     try {
       const session = await api.createSession();
       setSessionID(session.uuid);
       setStatus(session.status);
       window.open(telegramLink(session.uuid), "_blank", "noopener,noreferrer");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Failed to start auth");
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Failed to start auth");
     } finally {
       setBusy(false);
     }
   }
 
   async function submitCreateFund(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!token) {
-      return;
-    }
-    const form = new FormData(event.currentTarget);
-    const name = String(form.get("name") ?? "").trim();
-    if (!name) {
-      return;
-    }
-    setBusy(true);
-    try {
-      const fund = await api.createFund(token, name);
-      event.currentTarget.reset();
-      setActiveFundID(fund.id);
-      await loadFunds(token);
-      await loadDetails(fund.id, token);
-      setNotice("Fund created");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Failed to create fund");
-    } finally {
-      setBusy(false);
-    }
+      event.preventDefault();
+      if (!token) return;
+      const formEl = event.currentTarget as HTMLFormElement;
+      const form = new FormData(formEl);
+      const name = String(form.get("name") ?? "").trim();
+      if (!name) return;
+      setBusy(true);
+      try {
+        const fund = await api.createFund(token, name);
+        formEl.reset();
+        setActiveFundID(fund.id);
+        await loadFunds(token);
+        await loadDetails(fund.id, token);
+        toast("success", `Fund "${fund.name}" created!`);
+      } catch (err) {
+        toast("error", err instanceof Error ? err.message : "Failed to create fund");
+      } finally {
+        setBusy(false);
+      }
   }
 
   async function submitJoinFund(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!token) {
-      return;
-    }
-    const form = new FormData(event.currentTarget);
-    const code = String(form.get("invite") ?? "").trim();
-    if (!code) {
-      return;
-    }
+      event.preventDefault();
+      if (!token) return;
+      const formEl = event.currentTarget as HTMLFormElement;
+      const form = new FormData(formEl);
+      const code = String(form.get("invite") ?? "").trim();
+      if (!code) return;
+      setBusy(true);
+      try {
+        const fund = await api.joinFund(token, code);
+        formEl.reset();
+        setActiveFundID(fund.id);
+        await loadFunds(token);
+        await loadDetails(fund.id, token);
+        toast("success", `Joined "${fund.name}"!`);
+      } catch (err) {
+        toast("error", err instanceof Error ? err.message : "Failed to join fund");
+      } finally {
+        setBusy(false);
+      }
+  }
+
+  async function confirmDeleteFund(fundID: number) {
+    if (!token) return;
     setBusy(true);
     try {
-      const fund = await api.joinFund(token, code);
-      event.currentTarget.reset();
-      setActiveFundID(fund.id);
-      await loadFunds(token);
-      await loadDetails(fund.id, token);
-      setNotice("Joined fund");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Failed to join fund");
+      await api.deleteFund(token, fundID);
+      setDeleteConfirm(null);
+      const newFunds = funds.filter((f) => f.id !== fundID);
+      setFunds(newFunds);
+      if (activeFundID === fundID) {
+        const next = newFunds[0] ?? null;
+        setActiveFundID(next?.id ?? null);
+        setDetails({ members: [], purchases: [] });
+        if (next) await loadDetails(next.id, token);
+      }
+      toast("success", "Fund deleted");
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Failed to delete fund");
     } finally {
       setBusy(false);
     }
   }
 
   async function submitExpense(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!token || !activeFundID) {
-      return;
-    }
-    const form = new FormData(event.currentTarget);
-    const cost = Number(form.get("cost"));
-    const description = String(form.get("description") ?? "").trim();
-    if (!cost || !description) {
-      return;
-    }
-    setBusy(true);
-    try {
-      await api.addExpense(token, activeFundID, cost, description);
-      event.currentTarget.reset();
-      await loadDetails(activeFundID, token);
-      setNotice("Expense added");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Failed to add expense");
-    } finally {
-      setBusy(false);
-    }
+      event.preventDefault();
+      if (!token || !activeFundID) return;
+      const formEl = event.currentTarget as HTMLFormElement;
+      const form = new FormData(formEl);
+      const cost = Number(form.get("cost"));
+      const description = String(form.get("description") ?? "").trim();
+      if (!cost || !description) return;
+      setBusy(true);
+      try {
+        await api.addExpense(token, activeFundID, cost, description);
+        formEl.reset();
+        await loadDetails(activeFundID, token);
+        toast("success", "Expense added!");
+      } catch (err) {
+        toast("error", err instanceof Error ? err.message : "Failed to add expense");
+      } finally {
+        setBusy(false);
+      }
   }
 
   async function submitVirtualUser(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!token || !activeFundID) {
-      return;
-    }
-    const form = new FormData(event.currentTarget);
-    const firstName = String(form.get("firstName") ?? "").trim();
-    if (!firstName) {
-      return;
-    }
-    setBusy(true);
-    try {
-      await api.addVirtualUser(token, activeFundID, firstName);
-      event.currentTarget.reset();
-      await loadDetails(activeFundID, token);
-      setNotice("Member added");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Failed to add member");
-    } finally {
-      setBusy(false);
-    }
+      event.preventDefault();
+      if (!token || !activeFundID) return;
+      const formEl = event.currentTarget as HTMLFormElement;
+      const form = new FormData(formEl);
+      const firstName = String(form.get("firstName") ?? "").trim();
+      if (!firstName) return;
+      setBusy(true);
+      try {
+        await api.addVirtualUser(token, activeFundID, firstName);
+        formEl.reset();
+        await loadDetails(activeFundID, token);
+        toast("success", "Member added!");
+      } catch (err) {
+        toast("error", err instanceof Error ? err.message : "Failed to add member");
+      } finally {
+        setBusy(false);
+      }
   }
 
   async function removeMember(userID: number) {
-    if (!token || !activeFundID) {
-      return;
-    }
+    if (!token || !activeFundID) return;
     setBusy(true);
     try {
       await api.removeMember(token, activeFundID, userID);
       await loadDetails(activeFundID, token);
-      setNotice("Member removed");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Failed to remove member");
+      toast("success", "Member removed");
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "Failed to remove member");
     } finally {
       setBusy(false);
     }
@@ -267,472 +286,478 @@ function App() {
   }
 
   return (
-    <main className="app-shell px-4 py-4 text-paper sm:px-6 lg:px-8">
-      <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-7xl flex-col gap-4">
-        <Header token={token} onLogout={logout} onRefresh={() => token && loadFunds(token)} />
-
-        {notice ? (
-          <div className="panel rounded-lg px-4 py-3 text-sm font-semibold text-paper/80">
-            {notice}
+    <div className="min-h-screen bg-sc-bg text-sc-text font-sans antialiased">
+      {/* Toast stack */}
+      <div className="fixed bottom-6 right-4 left-4 sm:left-auto sm:right-6 z-50 flex flex-col gap-2 items-end pointer-events-none">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={`pointer-events-auto flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold shadow-2xl backdrop-blur-xl border max-w-sm w-full sm:w-auto transition-all
+              ${t.type === "success"
+                ? "bg-sc-green/15 border-sc-green/30 text-sc-green"
+                : "bg-sc-red/15 border-sc-red/30 text-sc-red"
+              }`}
+          >
+            {t.type === "success" ? <CheckCircle size={16} /> : <XCircle size={16} />}
+            {t.message}
           </div>
-        ) : null}
-
-        {!token ? (
-          <AuthPanel
-            busy={busy}
-            status={status}
-            sessionID={sessionID}
-            onStart={startTelegramAuth}
-          />
-        ) : (
-          <div className="grid flex-1 gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
-            <aside className="grid gap-4 lg:content-start">
-              <FundForms
-                busy={busy}
-                onCreate={submitCreateFund}
-                onJoin={submitJoinFund}
-              />
-              <FundList
-                funds={funds}
-                activeFundID={activeFundID}
-                onSelect={setActiveFundID}
-              />
-            </aside>
-
-            <section className="grid min-w-0 gap-4">
-              {activeFund ? (
-                <>
-                  <FundHero fund={activeFund} />
-                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <Metric
-                      label="Total spent"
-                      value={money(totalSpent)}
-                      icon={<BadgeDollarSign size={20} />}
-                      accent="mint"
-                    />
-                    <Metric
-                      label="Average"
-                      value={money(average)}
-                      icon={<BanknoteArrowUp size={20} />}
-                      accent="amber"
-                    />
-                    <Metric
-                      label="Members"
-                      value={String(totalMembers)}
-                      icon={<Users size={20} />}
-                      accent="aqua"
-                    />
-                    <Metric
-                      label="Transfers"
-                      value={String(debtRows.length)}
-                      icon={<ReceiptText size={20} />}
-                      accent="coral"
-                    />
-                  </div>
-
-                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
-                    <ExpensePanel busy={busy} onSubmit={submitExpense} />
-                    <SettlementPanel debts={debtRows} />
-                  </div>
-
-                  <div className="grid gap-4 xl:grid-cols-[minmax(320px,0.88fr)_minmax(0,1.12fr)]">
-                    <MembersPanel
-                      busy={busy}
-                      members={details.members}
-                      onAdd={submitVirtualUser}
-                      onRemove={removeMember}
-                    />
-                    <PurchasesPanel purchases={details.purchases} />
-                  </div>
-                </>
-              ) : (
-                <EmptyState />
-              )}
-            </section>
-          </div>
-        )}
+        ))}
       </div>
-    </main>
+
+      {/* Delete confirmation modal */}
+      {deleteConfirm !== null && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="sc-card rounded-3xl p-6 max-w-sm w-full">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="size-10 rounded-2xl bg-sc-red/15 grid place-items-center text-sc-red flex-shrink-0">
+                <Trash2 size={18} />
+              </div>
+              <div>
+                <p className="font-bold text-sc-text">Delete fund?</p>
+                <p className="text-sm text-sc-muted">This action cannot be undone.</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 sc-btn-soft rounded-2xl py-2.5 text-sm font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => confirmDeleteFund(deleteConfirm)}
+                disabled={busy}
+                className="flex-1 bg-sc-red/90 hover:bg-sc-red text-white rounded-2xl py-2.5 text-sm font-bold transition disabled:opacity-50"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!token ? (
+        <AuthPage busy={busy} status={status} sessionID={sessionID} onStart={startTelegramAuth} />
+      ) : (
+        <div className="flex flex-col min-h-screen">
+          {/* Navbar */}
+          <header className="sticky top-0 z-30 border-b border-sc-border bg-sc-bg/80 backdrop-blur-xl">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="size-9 rounded-2xl bg-gradient-to-br from-sc-green to-sc-blue grid place-items-center text-sc-bg flex-shrink-0">
+                  <Sparkles size={17} />
+                </div>
+                <span className="font-black text-lg tracking-tight">SplitCore</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => token && loadFunds(token)}
+                  className="sc-btn-ghost rounded-xl p-2.5"
+                  title="Refresh"
+                >
+                  <RefreshCw size={17} />
+                </button>
+                <button
+                  onClick={logout}
+                  className="sc-btn-ghost rounded-xl p-2.5 text-sc-muted hover:text-sc-red"
+                  title="Logout"
+                >
+                  <LogOut size={17} />
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <div className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 py-6">
+            <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+              {/* Sidebar */}
+              <aside className="space-y-4">
+                {/* Create / Join */}
+                <div className="sc-card rounded-3xl p-5 space-y-4">
+                  <form onSubmit={submitCreateFund} className="space-y-3">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-sc-muted">New fund</label>
+                    <input
+                      name="name"
+                      placeholder="Trip to Bali, Roommates…"
+                      className="sc-input w-full rounded-2xl px-4 py-3 text-sm"
+                    />
+                    <button
+                      type="submit"
+                      disabled={busy}
+                      className="sc-btn-primary w-full rounded-2xl py-2.5 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      <Plus size={16} /> Create
+                    </button>
+                  </form>
+
+                  <div className="border-t border-sc-border" />
+
+                  <form onSubmit={submitJoinFund} className="space-y-3">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-sc-muted">Join by code</label>
+                    <input
+                      name="invite"
+                      placeholder="aB12cD"
+                      className="sc-input w-full rounded-2xl px-4 py-3 text-sm font-mono"
+                    />
+                    <button
+                      type="submit"
+                      disabled={busy}
+                      className="sc-btn-soft w-full rounded-2xl py-2.5 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      <ArrowRight size={16} /> Join
+                    </button>
+                  </form>
+                </div>
+
+                {/* Fund list */}
+                <div className="sc-card rounded-3xl p-4">
+                  <div className="flex items-center justify-between px-1 mb-3">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-sc-muted">My funds</h2>
+                    <span className="text-xs bg-sc-surface rounded-lg px-2 py-0.5 font-bold text-sc-muted">{funds.length}</span>
+                  </div>
+                  <div className="space-y-1 max-h-[380px] overflow-y-auto pr-1">
+                    {funds.map((fund) => (
+                      <div
+                        key={fund.id}
+                        className={`group relative flex items-center rounded-2xl transition cursor-pointer
+                          ${activeFundID === fund.id
+                            ? "bg-sc-green/12 text-sc-text"
+                            : "hover:bg-sc-surface text-sc-text/80 hover:text-sc-text"
+                          }`}
+                      >
+                        <button
+                          className="flex-1 flex items-center gap-3 p-3 text-left min-w-0"
+                          onClick={() => setActiveFundID(fund.id)}
+                        >
+                          <div className={`size-8 rounded-xl grid place-items-center flex-shrink-0 text-sm font-black
+                            ${activeFundID === fund.id ? "bg-sc-green/20 text-sc-green" : "bg-sc-surface text-sc-muted"}`}>
+                            <Wallet size={14} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold">{fund.name}</p>
+                            <p className="text-xs text-sc-muted font-mono">{fund.invite_code}</p>
+                          </div>
+                          {activeFundID === fund.id && <ChevronRight size={14} className="flex-shrink-0 text-sc-green ml-auto" />}
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(fund.id); }}
+                          className="opacity-0 group-hover:opacity-100 p-2 mr-1 rounded-xl text-sc-muted hover:text-sc-red hover:bg-sc-red/10 transition"
+                          title="Delete fund"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    {funds.length === 0 && (
+                      <div className="text-center py-8 text-sc-muted text-sm">
+                        <Wallet size={28} className="mx-auto mb-2 opacity-30" />
+                        No funds yet
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </aside>
+
+              {/* Main content */}
+              <main className="space-y-5 min-w-0">
+                {activeFund ? (
+                  <>
+                    {/* Fund hero */}
+                    <div className="sc-card rounded-3xl overflow-hidden">
+                      <div className="h-1.5 bg-gradient-to-r from-sc-green via-sc-blue to-sc-purple" />
+                      <div className="p-6 flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wider text-sc-green mb-1">Active fund</p>
+                          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">{activeFund.name}</h1>
+                          <p className="text-sm text-sc-muted mt-1">Created {shortDate(activeFund.created_at)}</p>
+                        </div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(activeFund.invite_code).then(() => toast("success", "Invite code copied!"))}
+                          className="flex items-center gap-3 rounded-2xl border border-sc-amber/30 bg-sc-amber/8 hover:bg-sc-amber/14 px-4 py-3 text-sc-amber transition group"
+                          title="Copy invite code"
+                        >
+                          <div>
+                            <p className="text-xs font-bold uppercase opacity-60">Invite code</p>
+                            <p className="font-mono text-xl font-black">{activeFund.invite_code}</p>
+                          </div>
+                          <Copy size={16} className="group-hover:scale-110 transition" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Metrics */}
+                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                      <MetricCard label="Total spent" value={`$${money(totalSpent)}`} icon={<BadgeDollarSign size={18} />} color="green" />
+                      <MetricCard label="Average" value={`$${money(average)}`} icon={<BanknoteArrowUp size={18} />} color="amber" />
+                      <MetricCard label="Members" value={String(totalMembers)} icon={<Users size={18} />} color="blue" />
+                      <MetricCard label="Transfers" value={String(debtRows.length)} icon={<ReceiptText size={18} />} color="purple" />
+                    </div>
+
+                    {/* Expense + Settlement */}
+                    <div className="grid gap-5 xl:grid-cols-2">
+                      <ExpensePanel busy={busy} onSubmit={submitExpense} />
+                      <SettlementPanel debts={debtRows} />
+                    </div>
+
+                    {/* Members + Purchases */}
+                    <div className="grid gap-5 xl:grid-cols-2">
+                      <MembersPanel busy={busy} members={details.members} onAdd={submitVirtualUser} onRemove={removeMember} />
+                      <PurchasesPanel purchases={details.purchases} />
+                    </div>
+                  </>
+                ) : (
+                  <EmptyState />
+                )}
+              </main>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
-function telegramLink(uuid: string) {
-  return `https://t.me/${botName}?start=auth_${uuid}`;
-}
+// ─── Auth page ───────────────────────────────────────────────────────────────
 
-function Header({
-  token,
-  onLogout,
-  onRefresh
-}: {
-  token: string | null;
-  onLogout: () => void;
-  onRefresh: () => void;
-}) {
-  return (
-    <header className="panel flex flex-wrap items-center justify-between gap-3 rounded-lg px-4 py-3">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-mint text-ink shadow-glow">
-          <Sparkles size={21} />
-        </div>
-        <div className="min-w-0">
-          <h1 className="truncate text-xl font-black tracking-normal text-paper sm:text-2xl">
-            SplitCore
-          </h1>
-          <p className="truncate text-sm font-semibold text-paper/52">
-            Funds, members, expenses, settlement
-          </p>
-        </div>
-      </div>
-      {token ? (
-        <div className="flex w-full gap-2 sm:w-auto">
-          <Button
-            tone="soft"
-            className="flex-1 sm:flex-none"
-            icon={<RefreshCw size={17} />}
-            onClick={onRefresh}
-          >
-            Refresh
-          </Button>
-          <Button
-            tone="ghost"
-            className="flex-1 sm:flex-none"
-            icon={<LogOut size={17} />}
-            onClick={onLogout}
-          >
-            Logout
-          </Button>
-        </div>
-      ) : null}
-    </header>
-  );
-}
-
-function AuthPanel({
-  busy,
-  status,
-  sessionID,
-  onStart
-}: {
-  busy: boolean;
-  status: string;
-  sessionID: string;
-  onStart: () => void;
+function AuthPage({ busy, status, sessionID, onStart }: {
+  busy: boolean; status: string; sessionID: string; onStart: () => void;
 }) {
   const link = sessionID ? telegramLink(sessionID) : "";
-
   return (
-    <section className="grid flex-1 place-items-center py-8">
-      <div className="panel grid w-full max-w-5xl gap-6 overflow-hidden rounded-lg p-5 sm:p-7 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="grid content-center gap-6">
-          <div className="max-w-2xl">
-            <p className="mb-3 inline-flex rounded-lg border border-mint/24 bg-mint/12 px-3 py-1 text-sm font-bold text-mint">
-              Telegram-powered expense control
-            </p>
-            <h2 className="text-4xl font-black tracking-normal text-paper sm:text-5xl lg:text-6xl">
-              Shared money without the awkward math.
-            </h2>
-            <p className="mt-4 max-w-xl text-base font-medium leading-7 text-paper/64 sm:text-lg">
-              Open your SplitCore dashboard, connect through Telegram, and manage funds,
-              invite codes, spend history, members, and settlement in one responsive cockpit.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Button
-              className="w-full sm:w-auto"
-              icon={<Send size={18} />}
-              disabled={busy}
-              onClick={onStart}
-            >
-              Connect Telegram
-            </Button>
-            {link ? (
-              <a
-                className="focus-ring inline-flex min-h-11 items-center justify-center rounded-lg border border-paper/10 bg-paper/10 px-4 py-2.5 text-sm font-bold text-paper transition hover:bg-paper/16"
-                href={link}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Open auth link
-              </a>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="surface grid gap-4 rounded-lg p-4">
-          <div className="rounded-lg bg-ink/70 p-4">
-            <p className="text-sm font-bold uppercase text-paper/48">Session</p>
-            <p className="mt-2 break-all font-mono text-sm text-mint">
-              {sessionID || "Waiting for login"}
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-            {["init", status, "token"].map((step, index) => (
-              <div key={`${step}-${index}`} className="rounded-lg border border-paper/10 bg-paper/6 p-4">
-                <p className="text-xs font-black uppercase text-paper/44">Step {index + 1}</p>
-                <p className="mt-2 text-lg font-black capitalize text-paper">{step}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12 relative overflow-hidden">
+      {/* Background blobs */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-40 -left-40 size-[500px] rounded-full bg-sc-green/8 blur-3xl" />
+        <div className="absolute -bottom-40 -right-40 size-[500px] rounded-full bg-sc-blue/8 blur-3xl" />
       </div>
-    </section>
-  );
-}
 
-function FundForms({
-  busy,
-  onCreate,
-  onJoin
-}: {
-  busy: boolean;
-  onCreate: (event: FormEvent<HTMLFormElement>) => void;
-  onJoin: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  return (
-    <div className="panel grid gap-4 rounded-lg p-4">
-      <form className="grid gap-3" onSubmit={onCreate}>
-        <TextInput name="name" label="New fund" placeholder="Roommates, Trip, BBQ" />
-        <Button disabled={busy} icon={<Plus size={17} />}>
-          Create fund
-        </Button>
-      </form>
-      <div className="h-px bg-paper/10" />
-      <form className="grid gap-3" onSubmit={onJoin}>
-        <TextInput name="invite" label="Invite code" placeholder="aB12cD" />
-        <Button tone="soft" disabled={busy} icon={<ArrowRight size={17} />}>
-          Join fund
-        </Button>
-      </form>
-    </div>
-  );
-}
-
-function FundList({
-  funds,
-  activeFundID,
-  onSelect
-}: {
-  funds: Fund[];
-  activeFundID: number | null;
-  onSelect: (id: number) => void;
-}) {
-  return (
-    <div className="panel rounded-lg p-3">
-      <div className="mb-3 flex items-center justify-between px-1">
-        <h2 className="text-lg font-black">My funds</h2>
-        <span className="rounded-lg bg-paper/10 px-2 py-1 text-xs font-bold text-paper/62">
-          {funds.length}
-        </span>
-      </div>
-      <div className="grid max-h-[420px] gap-2 overflow-auto pr-1">
-        {funds.map((fund) => (
-          <button
-            key={fund.id}
-            className={`focus-ring rounded-lg border p-3 text-left transition ${
-              activeFundID === fund.id
-                ? "border-mint/40 bg-mint/13"
-                : "border-paper/8 bg-paper/5 hover:bg-paper/9"
-            }`}
-            onClick={() => onSelect(fund.id)}
-          >
-            <p className="truncate text-base font-black text-paper">{fund.name}</p>
-            <p className="mt-1 truncate text-sm font-semibold text-paper/48">
-              code {fund.invite_code}
-            </p>
-          </button>
-        ))}
-        {funds.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-paper/14 p-5 text-sm font-semibold text-paper/46">
-            No funds yet.
+      <div className="relative z-10 w-full max-w-md">
+        {/* Logo */}
+        <div className="text-center mb-10">
+          <div className="inline-flex size-16 rounded-3xl bg-gradient-to-br from-sc-green to-sc-blue items-center justify-center text-sc-bg mb-4 shadow-2xl shadow-sc-green/20">
+            <Sparkles size={28} />
           </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function FundHero({ fund }: { fund: Fund }) {
-  async function copyInvite() {
-    await navigator.clipboard.writeText(fund.invite_code);
-  }
-
-  return (
-    <div className="panel overflow-hidden rounded-lg">
-      <div className="grid gap-4 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:p-6">
-        <div className="min-w-0">
-          <p className="text-sm font-bold uppercase text-mint">Active fund</p>
-          <h2 className="mt-2 break-words text-3xl font-black tracking-normal text-paper sm:text-4xl">
-            {fund.name}
-          </h2>
-          <p className="mt-2 text-sm font-semibold text-paper/50">
-            Created {shortDate(fund.created_at)}
+          <h1 className="text-3xl font-black tracking-tight">SplitCore</h1>
+          <p className="text-sc-muted mt-2 text-sm leading-relaxed max-w-xs mx-auto">
+            Shared expenses made simple. Connect with Telegram to get started.
           </p>
         </div>
-        <button
-          className="focus-ring flex min-h-16 items-center justify-between gap-4 rounded-lg border border-amber/24 bg-amber/12 px-4 text-left text-amber transition hover:bg-amber/18 sm:min-w-56"
-          onClick={copyInvite}
-          title="Copy invite code"
-        >
-          <span>
-            <span className="block text-xs font-black uppercase opacity-70">Invite</span>
-            <span className="font-mono text-xl font-black">{fund.invite_code}</span>
-          </span>
-          <Copy size={18} />
-        </button>
+
+        <div className="sc-card rounded-3xl p-6 space-y-5">
+          <div>
+            <h2 className="text-lg font-bold mb-1">Sign in</h2>
+            <p className="text-sm text-sc-muted">We'll open your Telegram app for a one-tap login.</p>
+          </div>
+
+          <button
+            onClick={onStart}
+            disabled={busy}
+            className="w-full sc-btn-primary rounded-2xl py-3.5 text-sm font-bold flex items-center justify-center gap-2.5 disabled:opacity-50"
+          >
+            <Send size={17} />
+            {busy ? "Connecting…" : "Connect with Telegram"}
+          </button>
+
+          {link && (
+            <a
+              href={link}
+              target="_blank"
+              rel="noreferrer"
+              className="block text-center text-sm text-sc-muted hover:text-sc-text underline underline-offset-2 transition"
+            >
+              Open auth link manually
+            </a>
+          )}
+
+          {/* Status steps */}
+          {sessionID && (
+            <div className="rounded-2xl bg-sc-surface border border-sc-border p-4 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-sc-muted">Auth status</p>
+              <div className="flex items-center gap-2">
+                <div className={`size-2 rounded-full flex-shrink-0 ${status === "authenticated" ? "bg-sc-green" : status === "pending" ? "bg-sc-amber animate-pulse" : "bg-sc-surface"}`} />
+                <p className="text-sm font-semibold capitalize">{status}</p>
+              </div>
+              <p className="font-mono text-xs text-sc-muted break-all">{sessionID}</p>
+            </div>
+          )}
+        </div>
+
+        <p className="text-center text-xs text-sc-muted mt-6 opacity-60">
+          No password needed · Telegram-powered · Open source
+        </p>
       </div>
     </div>
   );
 }
 
-function ExpensePanel({
-  busy,
-  onSubmit
-}: {
-  busy: boolean;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+// ─── Metric card ─────────────────────────────────────────────────────────────
+
+const colorMap = {
+  green:  { bg: "bg-sc-green/12",  text: "text-sc-green",  icon: "bg-sc-green/20 text-sc-green" },
+  amber:  { bg: "bg-sc-amber/12",  text: "text-sc-amber",  icon: "bg-sc-amber/20 text-sc-amber" },
+  blue:   { bg: "bg-sc-blue/12",   text: "text-sc-blue",   icon: "bg-sc-blue/20 text-sc-blue" },
+  purple: { bg: "bg-sc-purple/12", text: "text-sc-purple", icon: "bg-sc-purple/20 text-sc-purple" },
+};
+
+function MetricCard({ label, value, icon, color }: {
+  label: string; value: string; icon: React.ReactNode; color: keyof typeof colorMap;
 }) {
+  const c = colorMap[color];
   return (
-    <form className="panel grid gap-4 rounded-lg p-4" onSubmit={onSubmit}>
+    <div className={`sc-card rounded-3xl p-4 flex items-center gap-3 ${c.bg} border-none`}>
+      <div className={`size-10 rounded-2xl grid place-items-center flex-shrink-0 ${c.icon}`}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-bold uppercase tracking-wider text-sc-muted truncate">{label}</p>
+        <p className={`text-xl font-black ${c.text} truncate`}>{value}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Expense panel ────────────────────────────────────────────────────────────
+
+function ExpensePanel({ busy, onSubmit }: { busy: boolean; onSubmit: (e: FormEvent<HTMLFormElement>) => void }) {
+  return (
+    <form onSubmit={onSubmit} className="sc-card rounded-3xl p-5 space-y-4">
       <div>
-        <h3 className="text-xl font-black">Log expense</h3>
-        <p className="mt-1 text-sm font-semibold text-paper/50">Amount and a short note.</p>
+        <h3 className="text-base font-bold">Log expense</h3>
+        <p className="text-xs text-sc-muted mt-0.5">Add an amount with a description.</p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-[160px_minmax(0,1fr)]">
-        <TextInput name="cost" label="Cost" min="0.01" step="0.01" type="number" placeholder="150.50" />
-        <TextInput name="description" label="Description" placeholder="Taxi to hotel" />
+      <div className="flex gap-3">
+        <input name="cost" type="number" min="0.01" step="0.01" placeholder="0.00"
+          className="sc-input w-28 rounded-2xl px-3 py-3 text-sm flex-shrink-0 text-center font-mono" />
+        <input name="description" placeholder="Dinner, taxi, groceries…"
+          className="sc-input flex-1 rounded-2xl px-4 py-3 text-sm" />
       </div>
-      <Button disabled={busy} icon={<ReceiptText size={17} />}>
-        Add expense
-      </Button>
+      <button type="submit" disabled={busy}
+        className="sc-btn-primary w-full rounded-2xl py-2.5 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+        <ReceiptText size={16} /> Add expense
+      </button>
     </form>
   );
 }
 
+// ─── Settlement panel ─────────────────────────────────────────────────────────
+
 function SettlementPanel({ debts }: { debts: Array<Debt & { from: string; to: string }> }) {
   return (
-    <div className="panel rounded-lg p-4">
-      <h3 className="text-xl font-black">Settlement</h3>
-      <div className="mt-4 grid gap-3">
-        {debts.map((debt, index) => (
-          <div key={`${debt.from_id}-${debt.to_id}-${index}`} className="surface rounded-lg p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="font-black text-paper">{debt.from}</p>
-              <span className="rounded-lg bg-coral/16 px-3 py-1 text-sm font-black text-coral">
-                {money(debt.amount)}
-              </span>
-              <p className="font-black text-mint">{debt.to}</p>
-            </div>
-          </div>
-        ))}
+    <div className="sc-card rounded-3xl p-5 space-y-4">
+      <div>
+        <h3 className="text-base font-bold">Settlement</h3>
+        <p className="text-xs text-sc-muted mt-0.5">Optimized payments to settle all debts.</p>
+      </div>
+      <div className="space-y-2">
         {debts.length === 0 ? (
-          <div className="rounded-lg border border-mint/18 bg-mint/10 p-4 text-sm font-bold text-mint">
-            All settled up.
+          <div className="rounded-2xl bg-sc-green/8 border border-sc-green/20 p-4 text-center text-sm font-semibold text-sc-green">
+            ✓ All settled up!
           </div>
-        ) : null}
+        ) : (
+          debts.map((debt, i) => (
+            <div key={`${debt.from_id}-${debt.to_id}-${i}`} className="flex items-center justify-between gap-3 rounded-2xl bg-sc-surface border border-sc-border px-4 py-3">
+              <span className="text-sm font-bold truncate">{debt.from}</span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="text-xs text-sc-muted">owes</span>
+                <span className="rounded-xl bg-sc-red/12 text-sc-red px-2.5 py-1 text-xs font-black">${money(debt.amount)}</span>
+                <span className="text-xs text-sc-muted">to</span>
+              </div>
+              <span className="text-sm font-bold text-sc-green truncate">{debt.to}</span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
 }
 
-function MembersPanel({
-  busy,
-  members,
-  onAdd,
-  onRemove
-}: {
-  busy: boolean;
-  members: User[];
-  onAdd: (event: FormEvent<HTMLFormElement>) => void;
-  onRemove: (userID: number) => void;
+// ─── Members panel ────────────────────────────────────────────────────────────
+
+function MembersPanel({ busy, members, onAdd, onRemove }: {
+  busy: boolean; members: User[]; onAdd: (e: FormEvent<HTMLFormElement>) => void; onRemove: (id: number) => void;
 }) {
   return (
-    <div className="panel grid gap-4 rounded-lg p-4">
+    <div className="sc-card rounded-3xl p-5 space-y-4">
       <div>
-        <h3 className="text-xl font-black">Members</h3>
-        <p className="mt-1 text-sm font-semibold text-paper/50">Real and virtual participants.</p>
+        <h3 className="text-base font-bold">Members</h3>
+        <p className="text-xs text-sc-muted mt-0.5">Real and virtual participants.</p>
       </div>
-      <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={onAdd}>
-        <TextInput name="firstName" label="Virtual member" placeholder="Alex" />
-        <Button className="self-end" disabled={busy} icon={<UserPlus size={17} />}>
-          Add
-        </Button>
+      <form onSubmit={onAdd} className="flex gap-2">
+        <input name="firstName" placeholder="Add virtual member…"
+          className="sc-input flex-1 rounded-2xl px-4 py-2.5 text-sm" />
+        <button type="submit" disabled={busy}
+          className="sc-btn-soft rounded-2xl px-3 py-2.5 flex items-center gap-1.5 text-sm font-bold disabled:opacity-50 flex-shrink-0">
+          <UserPlus size={15} /> Add
+        </button>
       </form>
-      <div className="grid gap-2">
-        {members.map((member) => (
-          <div
-            key={member.id}
-            className="surface flex items-center justify-between gap-3 rounded-lg p-3"
-          >
-            <div className="min-w-0">
-              <p className="truncate font-black text-paper">{displayUser(member)}</p>
-              <p className="truncate text-sm font-semibold text-paper/46">
-                {member.is_virtual ? "Virtual" : "Telegram"} member
-              </p>
+      <div className="space-y-2">
+        {members.map((m) => (
+          <div key={m.id} className="flex items-center justify-between gap-3 rounded-2xl bg-sc-surface border border-sc-border px-4 py-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="size-8 rounded-xl bg-sc-blue/15 grid place-items-center text-sc-blue flex-shrink-0 text-xs font-black">
+                {displayUser(m).charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold truncate">{displayUser(m)}</p>
+                <p className="text-xs text-sc-muted">{m.is_virtual ? "Virtual" : "Telegram"}</p>
+              </div>
             </div>
-            {member.is_virtual ? (
-              <button
-                className="focus-ring grid size-10 shrink-0 place-items-center rounded-lg bg-coral/14 text-coral transition hover:bg-coral/22"
-                onClick={() => onRemove(member.id)}
-                title="Remove member"
-              >
-                <Trash2 size={17} />
+            {m.is_virtual && (
+              <button onClick={() => onRemove(m.id)} title="Remove"
+                className="size-8 rounded-xl bg-sc-surface hover:bg-sc-red/12 text-sc-muted hover:text-sc-red grid place-items-center transition flex-shrink-0">
+                <X size={14} />
               </button>
-            ) : null}
+            )}
           </div>
         ))}
       </div>
     </div>
   );
 }
+
+// ─── Purchases panel ──────────────────────────────────────────────────────────
 
 function PurchasesPanel({ purchases }: { purchases: Purchase[] }) {
   return (
-    <div className="panel rounded-lg p-4">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="text-xl font-black">Expense history</h3>
-        <span className="rounded-lg bg-paper/10 px-2 py-1 text-xs font-bold text-paper/62">
-          {purchases.length}
-        </span>
+    <div className="sc-card rounded-3xl p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-bold">Expense history</h3>
+          <p className="text-xs text-sc-muted mt-0.5">All recorded expenses.</p>
+        </div>
+        <span className="text-xs bg-sc-surface border border-sc-border rounded-xl px-2.5 py-1 font-bold text-sc-muted">{purchases.length}</span>
       </div>
-      <div className="grid gap-3">
-        {purchases.map((purchase) => (
-          <div key={purchase.id} className="surface rounded-lg p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="break-words font-black text-paper">{purchase.description}</p>
-                <p className="mt-1 text-sm font-semibold text-paper/48">
-                  {displayUser(purchase.payer)} · {shortDate(purchase.created_at)}
-                </p>
-              </div>
-              <p className="rounded-lg bg-mint/12 px-3 py-1 font-black text-mint">
-                {money(purchase.amount)}
-              </p>
-            </div>
-          </div>
-        ))}
+      <div className="space-y-2">
         {purchases.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-paper/14 p-5 text-sm font-semibold text-paper/46">
-            No expenses yet.
-          </div>
-        ) : null}
+          <p className="text-center text-sm text-sc-muted py-4">No expenses yet</p>
+        ) : (
+          purchases.map((p) => (
+            <div key={p.id} className="flex items-start justify-between gap-3 rounded-2xl bg-sc-surface border border-sc-border px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold truncate">{p.description}</p>
+                <p className="text-xs text-sc-muted mt-0.5">{displayUser(p.payer)} · {shortDate(p.created_at)}</p>
+              </div>
+              <span className="rounded-xl bg-sc-green/12 text-sc-green px-2.5 py-1 text-sm font-black flex-shrink-0">${money(p.amount)}</span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
 }
 
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
 function EmptyState() {
   return (
-    <div className="panel grid min-h-[420px] place-items-center rounded-lg p-6 text-center">
-      <div className="max-w-md">
-        <div className="mx-auto grid size-14 place-items-center rounded-lg bg-mint text-ink shadow-glow">
-          <Plus size={24} />
+    <div className="sc-card rounded-3xl min-h-[400px] grid place-items-center p-8 text-center">
+      <div className="max-w-xs">
+        <div className="size-16 rounded-3xl bg-gradient-to-br from-sc-green/20 to-sc-blue/20 border border-sc-green/20 grid place-items-center mx-auto mb-5">
+          <Wallet size={26} className="text-sc-green" />
         </div>
-        <h2 className="mt-5 text-3xl font-black">Create your first fund</h2>
-        <p className="mt-2 text-base font-semibold leading-7 text-paper/58">
-          Your dashboard will show invite codes, members, spending history, and the optimized
-          settlement plan.
+        <h2 className="text-xl font-black mb-2">No fund selected</h2>
+        <p className="text-sm text-sc-muted leading-relaxed">
+          Create a fund or join one with an invite code to get started.
         </p>
       </div>
     </div>

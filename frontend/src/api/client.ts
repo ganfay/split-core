@@ -86,5 +86,11 @@ export const api = {
       token,
       method: "DELETE",
       body: { fund_id: fundID, user_id: userID }
+    }),
+  deleteFund: (token: string, fundID: number) =>
+    request<void>("/fund", {
+      token,
+      method: "DELETE",
+      body: { id: fundID }
     })
 };

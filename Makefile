@@ -6,7 +6,7 @@ export PROJECT_ROOT=$(shell pwd)
 export UID=$(shell id -u)
 export GID=$(shell id -g)
 
-MIGRATIONS_DIR = split-core/internal/repository/postgres_migrations
+MIGRATIONS_DIR = backend/internal/repository/postgres_migrations
 DB_URL = postgresql://${PG_USER}:${PG_PASS}@db:${PG_PORT}/${PG_DB}?sslmode=disable
 
 env-up:
