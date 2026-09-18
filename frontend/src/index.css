@@ -4,6 +4,7 @@
 
 @layer base {
   :root {
+    /* Dark theme (default) — original vivid palette */
     --sc-bg: #0d0f14;
     --sc-surface: #131720;
     --sc-border: rgba(255, 255, 255, 0.07);
@@ -16,6 +17,20 @@
     --sc-red: #f87171;
   }
 
+  html.light {
+    /* Light theme */
+    --sc-bg: #f8fafc;
+    --sc-surface: #ffffff;
+    --sc-border: rgba(15, 23, 42, 0.08);
+    --sc-text: #0f172a;
+    --sc-muted: rgba(15, 23, 42, 0.55);
+    --sc-green: #16a34a;
+    --sc-blue: #2563eb;
+    --sc-purple: #7c3aed;
+    --sc-amber: #d97706;
+    --sc-red: #dc2626;
+  }
+
   * {
     box-sizing: border-box;
   }
@@ -24,15 +39,26 @@
     min-width: 320px;
     background: var(--sc-bg);
     scroll-behavior: smooth;
+    transition: background-color 0.2s ease;
   }
 
   body {
     min-height: 100vh;
     margin: 0;
     overflow-x: hidden;
+    color: var(--sc-text);
     background:
-      radial-gradient(ellipse 80% 40% at 20% 0%, rgba(74, 222, 128, 0.06) 0%, transparent 60%),
-      radial-gradient(ellipse 60% 40% at 80% 100%, rgba(96, 165, 250, 0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 50% at 10% 0%, rgba(74, 222, 128, 0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 70% 50% at 90% 100%, rgba(96, 165, 250, 0.10) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 80% 10%, rgba(167, 139, 250, 0.07) 0%, transparent 50%),
+      var(--sc-bg);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  html.light body {
+    background:
+      radial-gradient(ellipse 80% 40% at 20% 0%, rgba(22, 163, 74, 0.04) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 100%, rgba(37, 99, 235, 0.04) 0%, transparent 60%),
       var(--sc-bg);
   }
 
@@ -63,23 +89,40 @@
     border: 1px solid rgba(255, 255, 255, 0.07);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 8px 32px rgba(0, 0, 0, 0.2);
     backdrop-filter: blur(12px);
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+
+  html.light .sc-card {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 6px 20px rgba(0, 0, 0, 0.04);
   }
 
   .sc-input {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #f0ede8;
+    color: var(--sc-text);
     outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s, background-color 0.2s;
+  }
+
+  html.light .sc-input {
+    background: rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(15, 23, 42, 0.1);
   }
 
   .sc-input::placeholder {
-    color: rgba(240, 237, 232, 0.35);
+    color: var(--sc-muted);
   }
 
   .sc-input:focus {
     border-color: rgba(74, 222, 128, 0.4);
     box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.08);
+  }
+
+  html.light .sc-input:focus {
+    border-color: rgba(22, 163, 74, 0.4);
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
   }
 
   .sc-btn-primary {
@@ -88,6 +131,12 @@
     font-weight: 700;
     transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
     box-shadow: 0 4px 16px rgba(74, 222, 128, 0.2);
+  }
+
+  html.light .sc-btn-primary {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: #ffffff;
+    box-shadow: 0 4px 16px rgba(22, 163, 74, 0.25);
   }
 
   .sc-btn-primary:hover:not(:disabled) {
@@ -101,24 +150,37 @@
 
   .sc-btn-soft {
     background: rgba(255, 255, 255, 0.07);
-    color: #f0ede8;
+    color: var(--sc-text);
     border: 1px solid rgba(255, 255, 255, 0.1);
     font-weight: 700;
     transition: background 0.15s;
+  }
+
+  html.light .sc-btn-soft {
+    background: rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(15, 23, 42, 0.1);
   }
 
   .sc-btn-soft:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.11);
   }
 
+  html.light .sc-btn-soft:hover:not(:disabled) {
+    background: rgba(15, 23, 42, 0.1);
+  }
+
   .sc-btn-ghost {
     background: transparent;
-    color: rgba(240, 237, 232, 0.6);
+    color: var(--sc-muted);
     transition: background 0.15s, color 0.15s;
   }
 
   .sc-btn-ghost:hover {
     background: rgba(255, 255, 255, 0.07);
-    color: #f0ede8;
+    color: var(--sc-text);
+  }
+
+  html.light .sc-btn-ghost:hover {
+    background: rgba(15, 23, 42, 0.06);
   }
 }

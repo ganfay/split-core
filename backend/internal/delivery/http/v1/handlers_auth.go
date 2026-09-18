@@ -131,13 +131,14 @@ func (s *Handler) GenerateAllJWTTokens(w http.ResponseWriter, r *http.Request) {
 	resp := domain.Tokens{
 		AccessToken: accessJWT,
 	}
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 	cookie := &http.Cookie{
 		Name:     "refresh_token",
 		Value:    refreshJWT,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true, // HTTPS only
-		SameSite: http.SameSiteStrictMode,
+		Secure:   isSecure,
+		SameSite: http.SameSiteLaxMode,
 	}
 	http.SetCookie(w, cookie)
 	w.Header().Set("Content-Type", "application/json")

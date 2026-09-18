@@ -39,3 +39,7 @@ type RemoveUserRequest struct {
 	FundID int   `json:"fund_id" example:"1"`
 	UserID int64 `json:"user_id" example:"2"`
 }
+
+type ResponseError struct {
+	Error string `json:"error"`
+}

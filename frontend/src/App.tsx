@@ -2,16 +2,22 @@ import {
   ArrowRight,
   BadgeDollarSign,
   BanknoteArrowUp,
+  Calendar,
   CheckCircle,
   ChevronRight,
   Copy,
+  Crown,
   LogOut,
+  Moon,
   Plus,
   ReceiptText,
   RefreshCw,
   Send,
+  ShieldCheck,
   Sparkles,
+  Sun,
   Trash2,
+  User as UserIcon,
   UserPlus,
   Users,
   Wallet,
@@ -21,7 +27,7 @@ import {
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api, authStore } from "./api/client";
 import type { Debt, Fund, Purchase, Settlement, User } from "./api/types";
-import { displayUser, money, shortDate } from "./lib/format";
+import { displayUser, fullDateTime, money, shortDate } from "./lib/format";
 
 const botName = import.meta.env.VITE_BOT_NAME || "SplitCoreBot";
 
@@ -40,6 +46,25 @@ type Toast = {
 
 // ─── Utility ────────────────────────────────────────────────────────────────
 
+function parseJwtUserId(jwtToken: string | null): number | null {
+  if (!jwtToken) return null;
+  try {
+    const parts = jwtToken.split(".");
+    if (parts.length < 2) return null;
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    const data = JSON.parse(jsonPayload);
+    return typeof data.user_id === "number" ? data.user_id : null;
+  } catch {
+    return null;
+  }
+}
+
 function telegramLink(uuid: string) {
   return `https://t.me/${botName}?start=auth_${uuid}`;
 }
@@ -50,6 +75,11 @@ let toastCounter = 0;
 
 function App() {
   const [token, setToken] = useState(() => authStore.getToken());
+  const [currentUser, setCurrentUser] = useState<User | null>(() => authStore.getUser());
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    const saved = localStorage.getItem("splitcore.theme");
+    return saved === "light" ? "light" : "dark"; // default is dark
+  });
   const [funds, setFunds] = useState<Fund[]>([]);
   const [activeFundID, setActiveFundID] = useState<number | null>(null);
   const [details, setDetails] = useState<FundDetails>({ members: [], purchases: [] });
@@ -59,7 +89,56 @@ function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
 
+  // Sync theme class to documentElement
+  useEffect(() => {
+    if (theme === "light") {
+      document.documentElement.classList.add("light");
+      document.documentElement.classList.remove("dark");
+    } else {
+      document.documentElement.classList.remove("light");
+      document.documentElement.classList.add("dark");
+    }
+    localStorage.setItem("splitcore.theme", theme);
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  }, []);
+
+  // Fetch current user info whenever token changes
+  useEffect(() => {
+    if (!token) {
+      setCurrentUser(null);
+      return;
+    }
+    api.getMe(token)
+      .then((u) => {
+        if (u) {
+          setCurrentUser(u);
+          authStore.setUser(u);
+        }
+      })
+      .catch(() => {});
+  }, [token]);
+
+  const currentUserID = useMemo(() => parseJwtUserId(token), [token]);
   const activeFund = details.fund ?? funds.find((f) => f.id === activeFundID);
+  const isOwnerOfActiveFund = Boolean(
+    activeFund && currentUserID !== null && activeFund.author_id === currentUserID
+  );
+  const activeFundOwner = useMemo(() => {
+    if (!activeFund) return undefined;
+    return details.members.find((m) => m.id === activeFund.author_id);
+  }, [activeFund, details.members]);
+
+  const resolvedCurrentUser = useMemo(() => {
+    if (currentUser) return currentUser;
+    if (currentUserID !== null) {
+      const fromMembers = details.members.find((m) => m.id === currentUserID);
+      if (fromMembers) return fromMembers;
+    }
+    return null;
+  }, [currentUser, currentUserID, details.members]);
   const totalMembers = details.members.length;
   const totalSpent = details.settlement?.total_amount ?? 0;
   const average = details.settlement?.average ?? 0;
@@ -120,6 +199,29 @@ function App() {
     loadDetails(activeFundID).catch((err) => toast("error", err.message));
   }, [activeFundID, loadDetails, token]);
 
+  // ── Listen for silent token refresh / forced logout from client.ts ────────
+  useEffect(() => {
+    const onRefreshed = (e: Event) => {
+      const newToken = (e as CustomEvent<string>).detail;
+      authStore.setToken(newToken);
+      setToken(newToken);
+    };
+    const onLogout = () => {
+      authStore.clear();
+      setToken(null);
+      setCurrentUser(null);
+      setFunds([]);
+      setActiveFundID(null);
+      setDetails({ members: [], purchases: [] });
+    };
+    window.addEventListener("splitcore:tokenrefreshed", onRefreshed);
+    window.addEventListener("splitcore:logout", onLogout);
+    return () => {
+      window.removeEventListener("splitcore:tokenrefreshed", onRefreshed);
+      window.removeEventListener("splitcore:logout", onLogout);
+    };
+  }, []);
+
   useEffect(() => {
     if (!sessionID || status !== "pending") return;
     const timer = window.setInterval(async () => {
@@ -130,6 +232,14 @@ function App() {
           const tokens = await api.generateTokens(sessionID);
           authStore.setToken(tokens.access_token);
           setToken(tokens.access_token);
+          api.getMe(tokens.access_token)
+            .then((u) => {
+              if (u) {
+                setCurrentUser(u);
+                authStore.setUser(u);
+              }
+            })
+            .catch(() => {});
           toast("success", "Telegram connected!");
           window.clearInterval(timer);
         }
@@ -227,7 +337,14 @@ function App() {
       const form = new FormData(formEl);
       const cost = Number(form.get("cost"));
       const description = String(form.get("description") ?? "").trim();
-      if (!cost || !description) return;
+      if (!description) {
+        toast("error", "Description is required");
+        return;
+      }
+      if (isNaN(cost) || cost < 1) {
+        toast("error", "Expense amount must be at least 1");
+        return;
+      }
       setBusy(true);
       try {
         await api.addExpense(token, activeFundID, cost, description);
@@ -344,9 +461,7 @@ function App() {
           <header className="sticky top-0 z-30 border-b border-sc-border bg-sc-bg/80 backdrop-blur-xl">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="size-9 rounded-2xl bg-gradient-to-br from-sc-green to-sc-blue grid place-items-center text-sc-bg flex-shrink-0">
-                  <Sparkles size={17} />
-                </div>
+                <img src="/logo.png" alt="SplitCore" className="size-9 object-contain flex-shrink-0" />
                 <span className="font-black text-lg tracking-tight">SplitCore</span>
               </div>
               <div className="flex items-center gap-2">
@@ -358,12 +473,25 @@ function App() {
                   <RefreshCw size={17} />
                 </button>
                 <button
+                  onClick={toggleTheme}
+                  className="sc-btn-ghost rounded-xl p-2.5"
+                  title={theme === "dark" ? "Switch to Light mode" : "Switch to Dark mode"}
+                >
+                  {theme === "dark" ? <Moon size={17} /> : <Sun size={17} />}
+                </button>
+                <button
                   onClick={logout}
                   className="sc-btn-ghost rounded-xl p-2.5 text-sc-muted hover:text-sc-red"
                   title="Logout"
                 >
                   <LogOut size={17} />
                 </button>
+                {resolvedCurrentUser && (
+                  <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sc-surface border border-sc-border text-sm text-sc-text">
+                    <UserIcon size={14} className="text-sc-muted" />
+                    <span>{resolvedCurrentUser.username || resolvedCurrentUser.first_name || "User"}</span>
+                  </div>
+                )}
               </div>
             </div>
           </header>
@@ -439,13 +567,15 @@ function App() {
                           </div>
                           {activeFundID === fund.id && <ChevronRight size={14} className="flex-shrink-0 text-sc-green ml-auto" />}
                         </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(fund.id); }}
-                          className="opacity-0 group-hover:opacity-100 p-2 mr-1 rounded-xl text-sc-muted hover:text-sc-red hover:bg-sc-red/10 transition"
-                          title="Delete fund"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {currentUserID !== null && fund.author_id === currentUserID && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDeleteConfirm(fund.id); }}
+                            className="opacity-0 group-hover:opacity-100 p-2 mr-1 rounded-xl text-sc-muted hover:text-sc-red hover:bg-sc-red/10 transition"
+                            title="Delete fund"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     ))}
                     {funds.length === 0 && (
@@ -465,23 +595,67 @@ function App() {
                     {/* Fund hero */}
                     <div className="sc-card rounded-3xl overflow-hidden">
                       <div className="h-1.5 bg-gradient-to-r from-sc-green via-sc-blue to-sc-purple" />
-                      <div className="p-6 flex flex-wrap items-start justify-between gap-4">
-                        <div>
-                          <p className="text-xs font-bold uppercase tracking-wider text-sc-green mb-1">Active fund</p>
-                          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">{activeFund.name}</h1>
-                          <p className="text-sm text-sc-muted mt-1">Created {shortDate(activeFund.created_at)}</p>
-                        </div>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(activeFund.invite_code).then(() => toast("success", "Invite code copied!"))}
-                          className="flex items-center gap-3 rounded-2xl border border-sc-amber/30 bg-sc-amber/8 hover:bg-sc-amber/14 px-4 py-3 text-sc-amber transition group"
-                          title="Copy invite code"
-                        >
+                      <div className="p-6 space-y-4">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
                           <div>
-                            <p className="text-xs font-bold uppercase opacity-60">Invite code</p>
-                            <p className="font-mono text-xl font-black">{activeFund.invite_code}</p>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="text-xs font-bold uppercase tracking-wider text-sc-green">Active fund</p>
+                              {isOwnerOfActiveFund ? (
+                                <span className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-lg bg-sc-amber/15 text-sc-amber">
+                                  <Crown size={10} /> Owner
+                                </span>
+                              ) : (
+                                <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-sc-surface text-sc-muted">
+                                  Member
+                                </span>
+                              )}
+                            </div>
+                            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">{activeFund.name}</h1>
                           </div>
-                          <Copy size={16} className="group-hover:scale-110 transition" />
-                        </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => navigator.clipboard.writeText(activeFund.invite_code).then(() => toast("success", "Invite code copied!"))}
+                              className="flex items-center gap-3 rounded-2xl border border-sc-amber/30 bg-sc-amber/8 hover:bg-sc-amber/14 px-4 py-3 text-sc-amber transition group"
+                              title="Copy invite code"
+                            >
+                              <div>
+                                <p className="text-xs font-bold uppercase opacity-60">Invite code</p>
+                                <p className="font-mono text-xl font-black">{activeFund.invite_code}</p>
+                              </div>
+                              <Copy size={16} className="group-hover:scale-110 transition" />
+                            </button>
+                            {isOwnerOfActiveFund && (
+                              <button
+                                onClick={() => setDeleteConfirm(activeFund.id)}
+                                className="flex items-center gap-2 rounded-2xl border border-sc-red/30 bg-sc-red/10 hover:bg-sc-red/20 px-3.5 py-3.5 text-sc-red transition"
+                                title="Delete fund (Owner only)"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Fund meta info row */}
+                        <div className="flex flex-wrap gap-3 pt-1 border-t border-sc-border">
+                          <div className="flex items-center gap-1.5 text-sm text-sc-muted">
+                            <Calendar size={13} className="text-sc-blue" />
+                            <span className="font-medium">Created</span>
+                            <span className="text-sc-text font-semibold">{fullDateTime(activeFund.created_at)}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-sm text-sc-muted">
+                            <ShieldCheck size={13} className="text-sc-purple" />
+                            <span className="font-medium">Owner</span>
+                            <span className="text-sc-text font-semibold">
+                              {activeFundOwner ? displayUser(activeFundOwner) : `#${activeFund.author_id}`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-sm text-sc-muted">
+                            <UserIcon size={13} className="text-sc-green" />
+                            <span className="font-medium">Fund ID</span>
+                            <span className="text-sc-text font-semibold">#{activeFund.id}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -534,9 +708,11 @@ function AuthPage({ busy, status, sessionID, onStart }: {
       <div className="relative z-10 w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-10">
-          <div className="inline-flex size-16 rounded-3xl bg-gradient-to-br from-sc-green to-sc-blue items-center justify-center text-sc-bg mb-4 shadow-2xl shadow-sc-green/20">
-            <Sparkles size={28} />
-          </div>
+          <img
+            src="/logo.jpg"
+            alt="SplitCore"
+            className="inline-block size-20 rounded-3xl object-cover mb-4 shadow-2xl shadow-sc-green/20"
+          />
           <h1 className="text-3xl font-black tracking-tight">SplitCore</h1>
           <p className="text-sc-muted mt-2 text-sm leading-relaxed max-w-xs mx-auto">
             Shared expenses made simple. Connect with Telegram to get started.
@@ -626,9 +802,9 @@ function ExpensePanel({ busy, onSubmit }: { busy: boolean; onSubmit: (e: FormEve
         <p className="text-xs text-sc-muted mt-0.5">Add an amount with a description.</p>
       </div>
       <div className="flex gap-3">
-        <input name="cost" type="number" min="0.01" step="0.01" placeholder="0.00"
+        <input name="cost" type="number" min="1" step="any" placeholder="1.00" required
           className="sc-input w-28 rounded-2xl px-3 py-3 text-sm flex-shrink-0 text-center font-mono" />
-        <input name="description" placeholder="Dinner, taxi, groceries…"
+        <input name="description" placeholder="Dinner, taxi, groceries…" required
           className="sc-input flex-1 rounded-2xl px-4 py-3 text-sm" />
       </div>
       <button type="submit" disabled={busy}

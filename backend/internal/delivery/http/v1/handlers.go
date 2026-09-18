@@ -156,7 +156,7 @@ func (s *Handler) DeleteFund(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.fundUC.DeleteFund(r.Context(), req.ID, iid); err != nil {
 		slog.Error("Failed to delete fund", "err", err)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -286,6 +286,17 @@ func (s *Handler) SettleFund(w http.ResponseWriter, r *http.Request) {
 	iid, ok := s.requireFundMember(r, req.FundID)
 	if !ok {
 		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	if req.Cost < 1 {
+		w.Header().Set("Content-Type", "application/json")
+		var resp domain.ResponseError
+		resp.Error = "cost must be greater than 0"
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	if err := s.fundUC.AddExpense(ctx, req.FundID, iid, req.Description, req.Cost); err != nil {
@@ -515,4 +526,29 @@ func (s *Handler) GetPurchases(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, purchases)
+}
+
+// GetMe
+//
+// @Summary      Get current authenticated user info
+// @Tags         user
+// @Produce      json
+// @Success      200 {object} domain.User
+// @Failure      401
+// @Failure      404
+// @Router       /api/v1/user/me [get]
+// @Router       /api/v1/user/me [post]
+func (s *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
+	iid, ok := currentUserID(r)
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	user, err := s.userUC.GetUserByIID(r.Context(), iid)
+	if err != nil {
+		slog.Error("Failed to get user by iid", "err", err, "iid", iid)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, user)
 }

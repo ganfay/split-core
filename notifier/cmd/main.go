@@ -14,7 +14,7 @@ import (
 func main() {
 	cfg := config.LoadConfig()
 
-	coreClient, err := client.NewCoreClient(fmt.Sprintf("app%v", cfg.GRpcPort))
+	coreClient, err := client.NewCoreClient(fmt.Sprintf("bot%v", cfg.GRpcPort))
 	if err != nil {
 		log.Fatalln("Main: Error init coreClient")
 		return
