@@ -1,0 +1,29 @@
+FROM golang:1.26.2-alpine AS builder
+
+WORKDIR /src
+
+COPY proto/ ./proto/
+
+COPY backend/go.mod backend/go.sum ./backend/
+
+WORKDIR /src/backend
+
+RUN go mod download
+
+COPY backend/ .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/web ./cmd/web/main.go
+
+
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates tzdata
+
+WORKDIR /app
+
+COPY --from=builder /bin/web .
+
+RUN mkdir -p /app/out/web && \
+    chown -R 1000:1000 /app/out/web
+
+CMD ["./web"]

@@ -1,4 +1,4 @@
-include split-core/.env
+include backend/.env
 export
 
 export PROJECT_ROOT=$(shell pwd)
@@ -6,7 +6,7 @@ export PROJECT_ROOT=$(shell pwd)
 export UID=$(shell id -u)
 export GID=$(shell id -g)
 
-MIGRATIONS_DIR = split-core/internal/repository/postgres_migrations
+MIGRATIONS_DIR = backend/internal/repository/postgres_migrations
 DB_URL = postgresql://${PG_USER}:${PG_PASS}@db:${PG_PORT}/${PG_DB}?sslmode=disable
 
 env-up:
@@ -59,16 +59,17 @@ logs:
 	docker logs --tail=100 $(name)
 
 lint-app:
-	@cd split-core && golangci-lint run
+	@cd backend && golangci-lint run
 
 lint-notify:
-	@cd split-notify && golangci-lint run
+	@cd notifier && golangci-lint run
 
 proto-generate:
 	@cd proto && protoc --go_out=. --go-grpc_out=. notification.proto
 
 run-services:
-	@mkdir -p "split-core/out/logs"
+	@mkdir -p "backend/out/bot"
+	@mkdir -p "backend/out/web"
 	@docker compose up -d --build
 
 dev-rerun:

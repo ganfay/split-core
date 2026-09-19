@@ -1,0 +1,191 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Dark theme (default) */
+    --sc-bg: #0d0f14;
+    --sc-header-bg: rgba(13, 15, 20, 0.75);
+    --sc-surface: #131720;
+    --sc-border: rgba(255, 255, 255, 0.08);
+    --sc-text: #f0ede8;
+    --sc-muted: rgba(240, 237, 232, 0.45);
+    --sc-green: #4ade80;
+    --sc-blue: #60a5fa;
+    --sc-purple: #a78bfa;
+    --sc-amber: #fbbf24;
+    --sc-red: #f87171;
+  }
+
+  html.light {
+    /* Light theme */
+    --sc-bg: #f8fafc;
+    --sc-header-bg: rgba(248, 250, 252, 0.8);
+    --sc-surface: #ffffff;
+    --sc-border: rgba(15, 23, 42, 0.08);
+    --sc-text: #0f172a;
+    --sc-muted: rgba(15, 23, 42, 0.55);
+    --sc-green: #16a34a;
+    --sc-blue: #2563eb;
+    --sc-purple: #7c3aed;
+    --sc-amber: #d97706;
+    --sc-red: #dc2626;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    min-width: 320px;
+    background: var(--sc-bg);
+    scroll-behavior: smooth;
+    transition: background-color 0.2s ease;
+  }
+
+  body {
+    min-height: 100vh;
+    margin: 0;
+    overflow-x: hidden;
+    color: var(--sc-text);
+    background-color: var(--sc-bg);
+    background-image:
+            radial-gradient(ellipse 60% 80% at 0% 30%, rgba(74, 222, 128, 0.16) 0%, transparent 65%),
+            radial-gradient(ellipse 60% 80% at 100% 45%, rgba(96, 165, 250, 0.16) 0%, transparent 65%),
+            radial-gradient(ellipse 70% 50% at 50% 0%, rgba(167, 139, 250, 0.11) 0%, transparent 60%);
+    background-attachment: fixed;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  html.light body {
+    background-image:
+            radial-gradient(ellipse 70% 50% at 10% 0%, rgba(22, 163, 74, 0.07) 0%, transparent 60%),
+            radial-gradient(ellipse 60% 60% at 90% 100%, rgba(37, 99, 235, 0.07) 0%, transparent 60%);
+    background-attachment: fixed;
+  }
+
+  button, input, textarea {
+    font: inherit;
+  }
+
+  button {
+    touch-action: manipulation;
+    cursor: pointer;
+  }
+
+  ::selection {
+    color: #0d0f14;
+    background: #4ade80;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgba(74, 222, 128, 0.5);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+}
+
+@layer components {
+  /* Прозрачные карточки с мягким размытием и просвечиванием градиента */
+  .sc-card {
+    background: rgba(19, 23, 32, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+
+  html.light .sc-card {
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  }
+
+  .sc-input {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--sc-text);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s, background-color 0.2s;
+  }
+
+  html.light .sc-input {
+    background: rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(15, 23, 42, 0.1);
+  }
+
+  .sc-input::placeholder {
+    color: var(--sc-muted);
+  }
+
+  .sc-input:focus {
+    border-color: rgba(74, 222, 128, 0.4);
+    box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.08);
+  }
+
+  html.light .sc-input:focus {
+    border-color: rgba(22, 163, 74, 0.4);
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+  }
+
+  .sc-btn-primary {
+    background: linear-gradient(135deg, #4ade80, #22c55e);
+    color: #0d0f14;
+    font-weight: 700;
+    transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+    box-shadow: 0 4px 16px rgba(74, 222, 128, 0.2);
+  }
+
+  html.light .sc-btn-primary {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: #ffffff;
+    box-shadow: 0 4px 16px rgba(22, 163, 74, 0.25);
+  }
+
+  .sc-btn-primary:hover:not(:disabled) {
+    opacity: 0.9;
+    box-shadow: 0 6px 24px rgba(74, 222, 128, 0.3);
+  }
+
+  .sc-btn-primary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .sc-btn-soft {
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--sc-text);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-weight: 700;
+    transition: background 0.15s;
+  }
+
+  html.light .sc-btn-soft {
+    background: rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(15, 23, 42, 0.1);
+  }
+
+  .sc-btn-soft:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.11);
+  }
+
+  html.light .sc-btn-soft:hover:not(:disabled) {
+    background: rgba(15, 23, 42, 0.1);
+  }
+
+  .sc-btn-ghost {
+    background: transparent;
+    color: var(--sc-muted);
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .sc-btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--sc-text);
+  }
+
+  html.light .sc-btn-ghost:hover {
+    background: rgba(15, 23, 42, 0.06);
+  }
+}

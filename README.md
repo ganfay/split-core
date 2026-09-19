@@ -1,128 +1,307 @@
-# 🚀 SplitCore — Microservices Telegram Expense Organizer
+# SplitCore v1.2.0
 
 [![CI Pipeline](https://github.com/GanFay/SplitCore/actions/workflows/ci.yml/badge.svg)](https://github.com/GanFay/SplitCore/actions/workflows/ci.yml)
 
-**SplitCore** is a modern, high-performance Telegram bot ecosystem designed to automate shared expense tracking for groups of friends, travelers, or event organizers. 
+**SplitCore** is a Telegram-first shared expense platform with a full web dashboard, async notifications, and a clean microservice architecture.
 
-The project has evolved from a simple monolithic bot into an **event-driven microservices architecture**. It showcases practical implementations of Clean Architecture, asynchronous message brokering (RabbitMQ), and high-speed internal RPC communication (gRPC).
-
-## 🔥 The Core Idea
-Users create "Funds", invite friends via unique deep-links, and record their expenses. The bot automatically calculates the balance: who overpaid and who needs to settle their debt using a **greedy matching algorithm** to minimize the total number of transactions.
-
-### 🎬 Demo
-*(Note: For the best experience, view the `.mp4` video directly if the GIF is buffering)*
+Create a fund, invite friends, log shared expenses, and let SplitCore calculate who owes whom using a greedy settlement algorithm that minimizes the number of transfers.
 
 ![SplitCore Demo](demo2.gif)
 
----
+## What Is New In 1.2.0
 
-## 🏗 System Architecture & Flow
+- **React + Tailwind web dashboard** served by Nginx on `:3000`.
+- **Telegram web login flow** with session polling, JWT access tokens, and refresh cookie support.
+- **HTTP API v1** for funds, members, purchases, balances, virtual users, and current user profile.
+- **Swagger documentation** regenerated for the updated API surface.
+- **Docker Compose frontend service** added next to backend, bot, notifier, Postgres, Redis, and RabbitMQ.
+- **Responsive UI** for desktop and mobile: fund sidebar, dashboard metrics, expense history, settlement view, invite codes, theme toggle, and member management.
+- **Deploy polish**: frontend build uses `pnpm-lock.yaml`, compose volumes are relative-path friendly, and Makefile lint paths match the current monorepo layout.
 
-To ensure high performance and zero blockage of the main Telegram Bot long-polling loop, the system is decoupled into two independent services communicating via **Event-Driven** and **RPC** patterns:
+## Product Flow
 
-1. **`split-core` (The Core Engine):** Handles database transactions, state management (FSM), greedy algorithms, and Telegram API interaction.
-2. **`split-notify` (The Background Worker):** An asynchronous service that consumes events, formats personalized HTML alerts, and orchestrates notifications.
+SplitCore has two user surfaces:
+
+- **Telegram Bot**: fast fund creation, invite links, expense logging, and group notifications.
+- **Web Dashboard**: visual fund management with balances, members, purchases, invite codes, and settlement details.
+
+The web app authenticates through Telegram:
+
+1. The browser asks the backend for a temporary auth session.
+2. The user opens the generated Telegram deep link.
+3. The bot confirms the session and binds it to the internal user id.
+4. The web app receives JWT tokens and loads the dashboard.
+
+## Architecture
 
 ```text
-  [ Telegram Bot User ]
-         │
-         ▼  (Adds an expense)
-┌─────────────────────────────────────────────────────────┐
-│                     split-core                          │
-│  1. Commits transaction to PostgreSQL database           │
-│  2. Publishes "expense_created" JSON event to RabbitMQ  │──┐
-└─────────────────────────────────────────────────────────┘  │
-         ▲                                     (gRPC)        │ (Async event)
-         │                                                   │
-         │ (2. gRPC Call: Fetch target users)                ▼
-         │ (4. gRPC Call: Send Telegram Message)      ┌──────────────┐
-         └────────────────────────────────────────────│ split-notify │
-                                                      └──────────────┘
+                       ┌────────────────────────────┐
+                       │     React + Tailwind UI     │
+                       │     Nginx, /api proxy       │
+                       └──────────────┬─────────────┘
+                                      │ HTTP / Swagger
+                                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                            backend                              │
+│  HTTP API · Telegram Bot · gRPC server · usecases · repositories │
+└──────────────┬───────────────────────────────┬──────────────────┘
+               │                               │
+               │ PostgreSQL / Redis            │ RabbitMQ event
+               ▼                               ▼
+      ┌────────────────┐              ┌────────────────┐
+      │ Postgres/Redis │              │    notifier    │
+      └────────────────┘              │ Rabbit consumer│
+                                      │ gRPC client    │
+                                      └───────┬────────┘
+                                              │ gRPC
+                                              ▼
+                                      ┌──────────────┐
+                                      │ Telegram API │
+                                      └──────────────┘
 ```
 
-### 🔄 The Async Notification Lifecycle:
-1. A user logs a new expense in `split-core`.
-2. `split-core` saves the data to **PostgreSQL** and immediately publishes an `expense_created` JSON event to a **RabbitMQ** queue.
-3. The background worker `split-notify` consumes the event.
-4. `split-notify` lacks user details, so it makes a synchronous **gRPC** request back to `split-core` to fetch the target users (excluding the expense creator).
-5. `split-notify` generates beautiful, personalized HTML-formatted notification templates.
-6. `split-notify` calls `split-core`'s gRPC server to dispatch the parsed messages back to Telegram asynchronously, keeping the main bot thread perfectly responsive.
+### Async Notification Lifecycle
 
----
+1. A user logs an expense.
+2. `backend` writes the purchase to PostgreSQL.
+3. `backend` publishes an `expense_created` event to RabbitMQ.
+4. `notifier` consumes the event.
+5. `notifier` asks `backend` over gRPC for fund members.
+6. `backend` sends Telegram notifications asynchronously, keeping the bot responsive.
 
-## 🛠 Tech Stack
-* **Language:** Go (Golang) 1.26.2
-* **Framework:** [telebot.v4](https://github.com/tucnak/telebot) (Telegram Bot API)
-* **Message Broker:** RabbitMQ (Classic Durable Queues via `amqp091-go` for async decoupled events)
-* **RPC Framework:** gRPC (via Protocol Buffers v3 for high-performance synchronous calls)
-* **Databases:** PostgreSQL (via `pgx/v5` Connection Pool), Redis 8.6.2 (via `go-redis/v9` for persistent FSM state)
-* **Infrastructure & DevOps:** Go Workspaces (`go.work`), Docker Multi-stage builds, Docker Compose, GNU Make
-* **CI/CD:** Automated testing and static analysis (`golangci-lint`) via GitHub Actions
+## Tech Stack
 
----
+| Area | Tech |
+| --- | --- |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS, lucide-react, Nginx |
+| Backend | Go 1.26, Clean Architecture-style domain/usecase/repository layers |
+| Telegram | `telebot.v4`, deep links, stateful bot flows |
+| API | Go `net/http`, JWT auth, Swagger via `swaggo` |
+| Async | RabbitMQ, durable event publishing |
+| RPC | gRPC, Protocol Buffers |
+| Storage | PostgreSQL, Redis |
+| DevOps | Docker, Docker Compose, Makefile, multi-stage builds |
 
-## 📂 Project Structure (Monorepo)
-
-The repository utilizes a strict Monorepo layout with isolated Go modules and shared protobuf contracts:
+## Repository Layout
 
 ```text
-SplitCore/ (Repository Root)
-├── .github/                # GitHub Actions CI/CD workflows
-├── proto/                  # gRPC contract definitions (.proto files and generated Go code)
-│   └── pb/
-├── split-core/             # The main transaction engine & Telegram Bot (Clean Architecture)
-│   ├── cmd/bot
-│   ├── internal/
-│   │   ├── config/         # Config loader (reads environment variables)
-│   │   ├── delivery/       # Adapters: Telegram handler & gRPC Server
-│   │   ├── repository/     # Data stores: Postgres, Redis & RabbitMQ Publisher
-│   │   ├── usecase/        # Core business workflow orchestrators
-|   |   ├── pkg/            # Logger and other utils
-|   |   └── domain/         # Entities
-|   ├─  .env
-│   └── Dockerfile
-├── split-notify/           # Asynchronous Notification worker service (Layered Architecture)
+.
+├── backend/                 # Core service: HTTP API, Telegram bot, gRPC server
 │   ├── cmd/
+│   │   ├── bot/             # Telegram bot entrypoint
+│   │   └── web/             # HTTP + Swagger entrypoint
+│   ├── docs/                # Generated Swagger docs
 │   ├── internal/
-│   │   ├── client/         # gRPC client for split-core
-│   │   ├── config/         # Config loader (reads environment variables)
-│   │   ├── consumer/       # RabbitMQ Event consumer
-│   │   └── processor/      # Event orchestrator (unmarshals JSON & routes messages)
-│   └── Dockerfile
-├── docker-compose.yml      # Orchestrates Postgres, Redis, RabbitMQ, split-core, and split-notify
-└── Makefile                # Unified development task automation
+│   │   ├── delivery/        # HTTP, Telegram, gRPC adapters
+│   │   ├── domain/          # Entities and interfaces
+│   │   ├── repository/      # Postgres, Redis, RabbitMQ implementations
+│   │   ├── usecase/         # Business logic and settlement algorithm
+│   │   └── pkg/             # Logger and utilities
+│   ├── Dockerfile.bot
+│   └── Dockerfile.web
+├── frontend/                # React + Tailwind web dashboard
+│   ├── src/
+│   │   ├── api/             # Typed HTTP client
+│   │   ├── components/      # Reusable UI pieces
+│   │   └── lib/             # Formatting helpers
+│   ├── Dockerfile
+│   └── nginx.conf
+├── notifier/                # RabbitMQ consumer and gRPC notification worker
+├── proto/                   # Notification service protobuf contract
+├── docker-compose.yaml      # Full local stack
+├── Makefile                 # Development and deployment shortcuts
+└── README.md
 ```
 
----
+## Services And Ports
 
-## ⚙️ Getting Started (Local Development)
+| Service | Port | Description |
+| --- | ---: | --- |
+| `frontend` | `3000` | Web dashboard, Nginx SPA, `/api` proxy |
+| `web` | `8080` | HTTP API and Swagger |
+| `bot` | - | Telegram long-polling bot |
+| `split-notify` | - | Async notification worker |
+| `db` | `5432` | PostgreSQL |
+| `redis` | `6379` | FSM/session cache |
+| `rabbitmq` | `5672` | AMQP |
+| `rabbitmq` management | `15672` | RabbitMQ UI |
 
-**Prerequisites:** Docker, Docker Compose, GNU Make.
+Swagger UI:
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/GanFay/SplitCore.git
-   ```
-2. **Set up environment variables:** 
-   Copy the example file at the root and fill in your Bot token and DB credentials:
-   ```bash
-   cp .env.example .env
-   ```
-3. **Initialize the Go Workspace locally (Optional, for IDE support):**
-   ```bash
-   go work init ./split-core ./split-notify ./proto
-   ```
-4. **Start the infrastructure services (Postgres, Redis, RabbitMQ):**
-   ```bash
-   make env-up
-   ```
-5. **Run PostgreSQL database migrations:**
-   ```bash
-   make migrate-up
-   ```
-6. **Build and start all microservices:**
-   ```bash
-   make run-services
-   ```
+```text
+http://localhost:8080/api/v1/swagger/index.html
+```
 
-*(Note: To rebuild and hot-reload only the notification service after modifying its code, you can use `make run-notify`)*.
+Frontend:
+
+```text
+http://localhost:3000
+```
+
+## Environment
+
+Create your backend environment file:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Required values:
+
+```env
+TOKEN=YOUR_BOT_TOKEN
+BOT_NAME=YOUR_BOT_NAME
+
+JWT_SECRET_ACCESS=your_access_secret
+JWT_SECRET_REFRESH=your_refresh_secret
+
+BOT_VER=1.2.0
+NOT_VER=1.2.0
+ENV=local
+
+PG_USER=USER
+PG_PASS=PASSWORD
+PG_DB=MYDB
+PG_PORT=5432
+
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASS=PASS
+
+RMQ_USER=guest
+RMQ_PASS=guest
+
+GRPC_PORT=:50001
+```
+
+For production, use strong secrets and run the web app behind HTTPS. Refresh tokens are stored in an HTTP-only secure cookie, so HTTPS is the expected deployment mode.
+
+## Run Locally
+
+Start the infrastructure:
+
+```bash
+make env-up
+```
+
+Run database migrations:
+
+```bash
+make migrate-up
+```
+
+Build and run the full stack:
+
+```bash
+make run-services
+```
+
+Open:
+
+```text
+Frontend: http://localhost:3000
+Swagger:  http://localhost:8080/api/v1/swagger/index.html
+RabbitMQ: http://localhost:15672
+```
+
+## Development
+
+Backend tests:
+
+```bash
+cd backend
+go test ./...
+```
+
+Frontend development server:
+
+```bash
+cd frontend
+pnpm install
+pnpm dev
+```
+
+Frontend production build:
+
+```bash
+cd frontend
+pnpm build
+```
+
+Regenerate Swagger:
+
+```bash
+cd backend
+go run -mod=mod github.com/swaggo/swag/cmd/swag init -g cmd/web/main.go
+```
+
+Generate protobuf code:
+
+```bash
+make proto-generate
+```
+
+Run only the notifier after changes:
+
+```bash
+make run-notify
+```
+
+## API Highlights
+
+Authentication:
+
+- `POST /api/v1/auth/telegram/init`
+- `POST /api/v1/auth/telegram/status`
+- `POST /api/v1/auth/telegram/tokens`
+- `POST /api/v1/auth/telegram/access`
+- `POST /api/v1/user/me`
+
+Funds:
+
+- `POST /api/v1/fund`
+- `DELETE /api/v1/fund`
+- `POST /api/v1/fund/list`
+- `POST /api/v1/fund/info`
+- `POST /api/v1/fund/join`
+- `POST /api/v1/fund/balance`
+- `POST /api/v1/fund/expense`
+- `POST /api/v1/fund/members`
+- `POST /api/v1/fund/virtual-users`
+- `POST /api/v1/fund/virtual-users/list`
+- `POST /api/v1/fund/purchases`
+- `DELETE /api/v1/fund/member`
+
+The API keeps selected `GET` routes for compatibility, but browser-facing endpoints use `POST` when a JSON body is required.
+
+## Deployment Notes
+
+- `docker-compose.yaml` includes local `build` blocks for development.
+- `docker-compose.prod.yaml` is image-only for VPS deployment with two domains and Caddy-managed HTTPS.
+- GitHub Actions builds and pushes GHCR images tagged as `latest` and `1.2.0`.
+- The frontend image builds with `pnpm install --frozen-lockfile`.
+- Nginx proxies `/api` to the internal `web:8080` service.
+- Run `make run-services` for local all-in-one deployment.
+- For production, set real environment variables, enable HTTPS, and avoid committing `.env` files.
+- If you publish images, tag them with `1.2.0` as well as `latest` for reproducible rollbacks.
+
+Production quick start:
+
+```bash
+docker compose --env-file backend/.env -f docker-compose.prod.yaml pull
+docker compose --env-file backend/.env -f docker-compose.prod.yaml --profile tools run --rm migrate
+docker compose --env-file backend/.env -f docker-compose.prod.yaml up -d
+```
+
+## Release Checklist For 1.2.0
+
+- Backend tests pass.
+- Frontend production build passes.
+- Swagger docs are generated.
+- Docker Compose config validates.
+- `backend/.env.example` version fields are updated to `1.2.0`.
+- README reflects the frontend + HTTP API release.
+
+## License
+
+This project is distributed under the terms of the [LICENSE](LICENSE).

@@ -6,6 +6,8 @@ postgres_data
 redis_data
 split-core/out
 *.dump
-split-core/.env
+backend/.env
 bot
 
+frontend/node_modules
+frontend/dist

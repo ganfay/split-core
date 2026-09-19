@@ -1,7 +1,11 @@
 .idea
 .env
 postgres-data
-split-core/out
+backend/out
+frontend/dist
+frontend/node_modules
 /go.work
 /go.work.sum
 README_old.md
+instruction.md
+bin
