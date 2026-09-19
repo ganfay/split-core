@@ -2,179 +2,177 @@
 
 [![CI Pipeline](https://github.com/GanFay/SplitCore/actions/workflows/ci.yml/badge.svg)](https://github.com/GanFay/SplitCore/actions/workflows/ci.yml)
 
-**SplitCore** is a Telegram-first shared expense platform with a full web dashboard, async notifications, and a clean microservice architecture.
+**SplitCore** is a Telegram-first platform for managing shared group expenses.
 
-Create a fund, invite friends, log shared expenses, and let SplitCore calculate who owes whom using a greedy settlement algorithm that minimizes the number of transfers.
+Create funds, invite members, record expenses, track balances, and calculate settlements using a greedy algorithm that minimizes the number of required transfers.
+
+### Live
+
+**Web Dashboard:** `https://thesplitcore.tech`
+**API:** `https://ganfay.me`
+
+The web dashboard is the main visual interface, while Telegram provides fast expense tracking, fund management, invites, and notifications.
 
 ![SplitCore Demo](demo2.gif)
 
-## What Is New In 1.2.0
+## Backend
 
-- **React + Tailwind web dashboard** served by Nginx on `:3000`.
-- **Telegram web login flow** with session polling, JWT access tokens, and refresh cookie support.
-- **HTTP API v1** for funds, members, purchases, balances, virtual users, and current user profile.
-- **Swagger documentation** regenerated for the updated API surface.
-- **Docker Compose frontend service** added next to backend, bot, notifier, Postgres, Redis, and RabbitMQ.
-- **Responsive UI** for desktop and mobile: fund sidebar, dashboard metrics, expense history, settlement view, invite codes, theme toggle, and member management.
-- **Deploy polish**: frontend build uses `pnpm-lock.yaml`, compose volumes are relative-path friendly, and Makefile lint paths match the current monorepo layout.
+The backend is the core application service and provides:
 
-## Product Flow
+* HTTP API
+* Telegram bot
+* gRPC server
+* Business use cases
+* Domain entities and interfaces
+* PostgreSQL and Redis repositories
+* RabbitMQ event publishing
+* Settlement calculation
 
-SplitCore has two user surfaces:
-
-- **Telegram Bot**: fast fund creation, invite links, expense logging, and group notifications.
-- **Web Dashboard**: visual fund management with balances, members, purchases, invite codes, and settlement details.
-
-The web app authenticates through Telegram:
-
-1. The browser asks the backend for a temporary auth session.
-2. The user opens the generated Telegram deep link.
-3. The bot confirms the session and binds it to the internal user id.
-4. The web app receives JWT tokens and loads the dashboard.
-
-## Architecture
+The codebase follows a **Clean Architecture-style separation** between delivery, domain, use cases, and infrastructure.
 
 ```text
-                       ┌────────────────────────────┐
-                       │     React + Tailwind UI     │
-                       │     Nginx, /api proxy       │
-                       └──────────────┬─────────────┘
-                                      │ HTTP / Swagger
-                                      ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                            backend                              │
-│  HTTP API · Telegram Bot · gRPC server · usecases · repositories │
-└──────────────┬───────────────────────────────┬──────────────────┘
-               │                               │
-               │ PostgreSQL / Redis            │ RabbitMQ event
-               ▼                               ▼
-      ┌────────────────┐              ┌────────────────┐
-      │ Postgres/Redis │              │    notifier    │
-      └────────────────┘              │ Rabbit consumer│
-                                      │ gRPC client    │
-                                      └───────┬────────┘
-                                              │ gRPC
-                                              ▼
-                                      ┌──────────────┐
-                                      │ Telegram API │
-                                      └──────────────┘
+React + Tailwind
+       │
+       │ HTTP
+       ▼
+    Backend
+   ┌───┼───────────────┐
+   │   │               │
+   ▼   ▼               ▼
+Postgres Redis       RabbitMQ
+                       │
+                       ▼
+                    Notifier
+                       │
+                       │ gRPC
+                       ▼
+                    Backend
+                       │
+                       ▼
+                 Telegram API
 ```
 
-### Async Notification Lifecycle
+## Settlement Algorithm
 
-1. A user logs an expense.
-2. `backend` writes the purchase to PostgreSQL.
-3. `backend` publishes an `expense_created` event to RabbitMQ.
-4. `notifier` consumes the event.
-5. `notifier` asks `backend` over gRPC for fund members.
-6. `backend` sends Telegram notifications asynchronously, keeping the bot responsive.
+SplitCore calculates the final debt graph from the current balances.
+
+The settlement step uses a **greedy debt-settlement algorithm**:
+
+1. Calculate each member's net balance.
+2. Separate creditors and debtors.
+3. Match the largest outstanding debtor with the largest outstanding creditor.
+4. Transfer the smaller of the two remaining amounts.
+5. Repeat until all balances are settled.
+
+This reduces the number of transfers required to settle the group compared with simply paying every recorded expense individually.
 
 ## Tech Stack
 
-| Area | Tech |
-| --- | --- |
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS, lucide-react, Nginx |
-| Backend | Go 1.26, Clean Architecture-style domain/usecase/repository layers |
-| Telegram | `telebot.v4`, deep links, stateful bot flows |
-| API | Go `net/http`, JWT auth, Swagger via `swaggo` |
-| Async | RabbitMQ, durable event publishing |
-| RPC | gRPC, Protocol Buffers |
-| Storage | PostgreSQL, Redis |
-| DevOps | Docker, Docker Compose, Makefile, multi-stage builds |
+| Layer        | Technology                                                |
+| ------------ | --------------------------------------------------------- |
+| Frontend     | React 19, TypeScript, Vite, Tailwind CSS, lucide-react    |
+| Web Server   | Nginx                                                     |
+| Backend      | Go 1.26                                                   |
+| Architecture | Clean Architecture-style domain/usecase/repository layers |
+| Telegram     | `telebot.v4`, deep links, stateful bot flows              |
+| HTTP API     | Go `net/http`, JWT, Swagger via `swaggo`                  |
+| Messaging    | RabbitMQ                                                  |
+| RPC          | gRPC + Protocol Buffers                                   |
+| Database     | PostgreSQL                                                |
+| Cache / FSM  | Redis                                                     |
+| Containers   | Docker, Docker Compose                                    |
+| Tooling      | Makefile, GitHub Actions, GHCR                            |
 
-## Repository Layout
+## Services
 
-```text
-.
-├── backend/                 # Core service: HTTP API, Telegram bot, gRPC server
-│   ├── cmd/
-│   │   ├── bot/             # Telegram bot entrypoint
-│   │   └── web/             # HTTP + Swagger entrypoint
-│   ├── docs/                # Generated Swagger docs
-│   ├── internal/
-│   │   ├── delivery/        # HTTP, Telegram, gRPC adapters
-│   │   ├── domain/          # Entities and interfaces
-│   │   ├── repository/      # Postgres, Redis, RabbitMQ implementations
-│   │   ├── usecase/         # Business logic and settlement algorithm
-│   │   └── pkg/             # Logger and utilities
-│   ├── Dockerfile.bot
-│   └── Dockerfile.web
-├── frontend/                # React + Tailwind web dashboard
-│   ├── src/
-│   │   ├── api/             # Typed HTTP client
-│   │   ├── components/      # Reusable UI pieces
-│   │   └── lib/             # Formatting helpers
-│   ├── Dockerfile
-│   └── nginx.conf
-├── notifier/                # RabbitMQ consumer and gRPC notification worker
-├── proto/                   # Notification service protobuf contract
-├── docker-compose.yaml      # Full local stack
-├── Makefile                 # Development and deployment shortcuts
-└── README.md
-```
+| Service               |    Port | Purpose                          |
+| --------------------- | ------: | -------------------------------- |
+| `frontend`            |  `3000` | React dashboard + Nginx          |
+| `web`                 |  `8080` | HTTP API + Swagger               |
+| `bot`                 |       — | Telegram long-polling bot        |
+| `split-notify`        |       — | Asynchronous notification worker |
+| `db`                  |  `5432` | PostgreSQL                       |
+| `redis`               |  `6379` | FSM and session storage          |
+| `rabbitmq`            |  `5672` | AMQP broker                      |
+| `rabbitmq management` | `15672` | RabbitMQ management UI           |
 
-## Services And Ports
+### Local URLs
 
-| Service | Port | Description |
-| --- | ---: | --- |
-| `frontend` | `3000` | Web dashboard, Nginx SPA, `/api` proxy |
-| `web` | `8080` | HTTP API and Swagger |
-| `bot` | - | Telegram long-polling bot |
-| `split-notify` | - | Async notification worker |
-| `db` | `5432` | PostgreSQL |
-| `redis` | `6379` | FSM/session cache |
-| `rabbitmq` | `5672` | AMQP |
-| `rabbitmq` management | `15672` | RabbitMQ UI |
-
-Swagger UI:
-
-```text
-http://localhost:8080/api/v1/swagger/index.html
-```
-
-Frontend:
+**Frontend**
 
 ```text
 http://localhost:3000
 ```
 
+**Swagger**
+
+```text
+http://localhost:8080/api/v1/swagger/index.html
+```
+
+**RabbitMQ**
+
+```text
+http://localhost:15672
+```
+
 ## Environment
 
-Create your backend environment file:
+Create the backend environment file:
 
 ```bash
 cp backend/.env.example backend/.env
+cp backend/.env .env
 ```
 
-Required values:
+Required configuration:
 
 ```env
+#SettingsTG
 TOKEN=YOUR_BOT_TOKEN
 BOT_NAME=YOUR_BOT_NAME
 
-JWT_SECRET_ACCESS=your_access_secret
-JWT_SECRET_REFRESH=your_refresh_secret
+#Deploy
+IMAGE_TAG=latest
+FRONTEND_DOMAIN=split.example.com
+BACKEND_DOMAIN=api.split.example.com
+ACME_EMAIL=you@example.com
 
+#HTTP
+JWT_SECRET_ACCESS=your_secret_key
+JWT_SECRET_REFRESH=your_secret_key
+
+#Settings
 BOT_VER=1.2.0
 NOT_VER=1.2.0
 ENV=local
 
+#PostgreSQL
 PG_USER=USER
 PG_PASS=PASSWORD
 PG_DB=MYDB
 PG_PORT=5432
 
+#Redis
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_PASS=PASS
 
-RMQ_USER=guest
+#RabbitMQ
 RMQ_PASS=guest
+RMQ_USER=guest
 
+#gRpc Port
 GRPC_PORT=:50001
 ```
 
-For production, use strong secrets and run the web app behind HTTPS. Refresh tokens are stored in an HTTP-only secure cookie, so HTTPS is the expected deployment mode.
+For production:
+
+* use strong, unique secrets;
+* keep `.env` files out of version control;
+* run the web application behind HTTPS;
+* keep refresh tokens in secure HTTP-only cookies;
+* use versioned container tags for reproducible deployments.
 
 ## Run Locally
 
@@ -190,30 +188,30 @@ Run database migrations:
 make migrate-up
 ```
 
-Build and run the full stack:
+Start the full stack:
 
 ```bash
 make run-services
 ```
 
-Open:
+Then open:
 
 ```text
-Frontend: http://localhost:3000
-Swagger:  http://localhost:8080/api/v1/swagger/index.html
-RabbitMQ: http://localhost:15672
+Frontend → http://localhost:3000
+Swagger  → http://localhost:8080/api/v1/swagger/index.html
+RabbitMQ → http://localhost:15672
 ```
 
 ## Development
 
-Backend tests:
+### Backend tests
 
 ```bash
 cd backend
 go test ./...
 ```
 
-Frontend development server:
+### Frontend development
 
 ```bash
 cd frontend
@@ -221,86 +219,146 @@ pnpm install
 pnpm dev
 ```
 
-Frontend production build:
+### Frontend production build
 
 ```bash
 cd frontend
 pnpm build
 ```
 
-Regenerate Swagger:
+### Regenerate Swagger
 
 ```bash
 cd backend
 go run -mod=mod github.com/swaggo/swag/cmd/swag init -g cmd/web/main.go
 ```
 
-Generate protobuf code:
+### Generate protobuf code
 
 ```bash
 make proto-generate
 ```
 
-Run only the notifier after changes:
+### Run the notifier
 
 ```bash
 make run-notify
 ```
 
-## API Highlights
+## API
 
-Authentication:
+The current API is versioned under `/api/v1`.
 
-- `POST /api/v1/auth/telegram/init`
-- `POST /api/v1/auth/telegram/status`
-- `POST /api/v1/auth/telegram/tokens`
-- `POST /api/v1/auth/telegram/access`
-- `POST /api/v1/user/me`
+### Authentication
 
-Funds:
+```text
+POST /api/v1/auth/telegram/init
+POST /api/v1/auth/telegram/status
+POST /api/v1/auth/telegram/tokens
+POST /api/v1/auth/telegram/access
+POST /api/v1/user/me
+```
 
-- `POST /api/v1/fund`
-- `DELETE /api/v1/fund`
-- `POST /api/v1/fund/list`
-- `POST /api/v1/fund/info`
-- `POST /api/v1/fund/join`
-- `POST /api/v1/fund/balance`
-- `POST /api/v1/fund/expense`
-- `POST /api/v1/fund/members`
-- `POST /api/v1/fund/virtual-users`
-- `POST /api/v1/fund/virtual-users/list`
-- `POST /api/v1/fund/purchases`
-- `DELETE /api/v1/fund/member`
+### Funds
 
-The API keeps selected `GET` routes for compatibility, but browser-facing endpoints use `POST` when a JSON body is required.
+```text
+POST   /api/v1/fund
+DELETE /api/v1/fund
 
-## Deployment Notes
+POST /api/v1/fund/list
+POST /api/v1/fund/info
+POST /api/v1/fund/join
+POST /api/v1/fund/balance
+POST /api/v1/fund/expense
+POST /api/v1/fund/members
+POST /api/v1/fund/virtual-users
+POST /api/v1/fund/virtual-users/list
+POST /api/v1/fund/purchases
 
-- `docker-compose.yaml` includes local `build` blocks for development.
-- `docker-compose.prod.yaml` is image-only for VPS deployment with two domains and Caddy-managed HTTPS.
-- GitHub Actions builds and pushes GHCR images tagged as `latest` and `1.2.0`.
-- The frontend image builds with `pnpm install --frozen-lockfile`.
-- Nginx proxies `/api` to the internal `web:8080` service.
-- Run `make run-services` for local all-in-one deployment.
-- For production, set real environment variables, enable HTTPS, and avoid committing `.env` files.
-- If you publish images, tag them with `1.2.0` as well as `latest` for reproducible rollbacks.
+DELETE /api/v1/fund/member
+```
+
+Selected `GET` endpoints remain available for compatibility. Browser-facing endpoints that require JSON request bodies currently use `POST`.
+
+Full API documentation is available through Swagger:
+
+```text
+http://localhost:8080/api/v1/swagger/index.html
+```
+
+## Deployment
+
+The repository provides separate Compose configurations for development and production.
+
+### Development
+
+`docker-compose.yaml` builds services locally and is intended for development.
+
+### Production
+
+`docker-compose.prod.yaml` uses pre-built container images and is intended for VPS deployment.
+
+The production stack includes:
+
+* frontend served by Nginx;
+* internal `/api` proxy to the backend;
+* GHCR-hosted images;
+* Caddy-managed HTTPS;
+* database migrations through the `tools` profile.
 
 Production quick start:
 
 ```bash
-docker compose --env-file backend/.env -f docker-compose.prod.yaml pull
-docker compose --env-file backend/.env -f docker-compose.prod.yaml --profile tools run --rm migrate
-docker compose --env-file backend/.env -f docker-compose.prod.yaml up -d
+docker compose \
+  --env-file backend/.env \
+  -f docker-compose.prod.yaml \
+  pull
 ```
 
-## Release Checklist For 1.2.0
+Run migrations:
 
-- Backend tests pass.
-- Frontend production build passes.
-- Swagger docs are generated.
-- Docker Compose config validates.
-- `backend/.env.example` version fields are updated to `1.2.0`.
-- README reflects the frontend + HTTP API release.
+```bash
+docker compose \
+  --env-file backend/.env \
+  -f docker-compose.prod.yaml \
+  --profile tools run --rm migrate
+```
+
+Start the stack:
+
+```bash
+docker compose \
+  --env-file backend/.env \
+  -f docker-compose.prod.yaml \
+  up -d
+```
+
+### Container Tags
+
+Production images are published with both:
+
+```text
+latest
+1.2.0
+```
+
+Versioned tags should be preferred when reproducible deployments or rollbacks are required.
+
+## CI/CD
+
+GitHub Actions runs the CI pipeline and builds the project's container images.
+
+The production workflow publishes images to **GitHub Container Registry (GHCR)** using both the release version and `latest` tags.
+
+## Release Checklist — 1.2.0
+
+* [x] Backend tests pass
+* [x] Frontend production build passes
+* [x] Swagger documentation regenerated
+* [x] Docker Compose configuration validated
+* [x] `backend/.env.example` updated
+* [x] README updated for the web + API release
+* [x] Production deployment verified
 
 ## License
 
