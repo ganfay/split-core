@@ -28,7 +28,9 @@ jobs:
           context: .
           file: backend/Dockerfile.web
           push: true
-          tags: ghcr.io/${{ github.repository }}/web:latest
+          tags: |
+            ghcr.io/ganfay/split-core/web:latest
+            ghcr.io/ganfay/split-core/web:1.2.0
 
       - name: Build and Push Bot
         uses: docker/build-push-action@v5
@@ -36,7 +38,9 @@ jobs:
           context: .
           file: backend/Dockerfile.bot
           push: true
-          tags: ghcr.io/${{ github.repository }}/bot:latest
+          tags: |
+            ghcr.io/ganfay/split-core/bot:latest
+            ghcr.io/ganfay/split-core/bot:1.2.0
 
       - name: Build and Push Notifier
         uses: docker/build-push-action@v5
@@ -44,7 +48,9 @@ jobs:
           context: .
           file: notifier/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}/notify:latest
+          tags: |
+            ghcr.io/ganfay/split-core/notify:latest
+            ghcr.io/ganfay/split-core/notify:1.2.0
 
       - name: Build and Push Frontend
         uses: docker/build-push-action@v5
@@ -52,7 +58,11 @@ jobs:
           context: .
           file: frontend/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}/frontend:latest
+          build-args: |
+            VITE_BOT_NAME=${{ secrets.BOT_NAME }}
+          tags: |
+            ghcr.io/ganfay/split-core/frontend:latest
+            ghcr.io/ganfay/split-core/frontend:1.2.0
 
   deploy:
     needs: build-and-push
@@ -66,5 +76,11 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd ${{ secrets.SERVER_PROJECT_DIR || '/home/user/split-core' }}
-            docker compose pull
-            docker compose up -d
+            git pull
+            if [ -n "${{ secrets.GHCR_PAT }}" ]; then
+              echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            fi
+            docker compose --env-file backend/.env -f docker-compose.prod.yaml pull
+            docker compose --env-file backend/.env -f docker-compose.prod.yaml --profile tools run --rm migrate
+            docker compose --env-file backend/.env -f docker-compose.prod.yaml up -d
+            docker image prune -f

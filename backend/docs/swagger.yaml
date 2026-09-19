@@ -226,6 +226,31 @@ paths:
       summary: Check session status
       tags:
       - sessions
+    post:
+      consumes:
+      - application/json
+      description: Returns the current status of a session by UUID.
+      parameters:
+      - description: Session UUID
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.SessionCheckRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: pending
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: Check session status
+      tags:
+      - sessions
   /api/v1/auth/telegram/tokens:
     post:
       consumes:
@@ -357,6 +382,32 @@ paths:
       summary: get fund settlement
       tags:
       - fund
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Fund id
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.FundRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Settlement'
+        "400":
+          description: Bad Request
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      summary: get fund settlement
+      tags:
+      - fund
   /api/v1/fund/expense:
     post:
       consumes:
@@ -409,6 +460,32 @@ paths:
       summary: get fund info
       tags:
       - fund
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Fund id or invite code
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.FundRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Fund'
+        "400":
+          description: Bad Request
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      summary: get fund info
+      tags:
+      - fund
   /api/v1/fund/join:
     post:
       consumes:
@@ -434,6 +511,35 @@ paths:
         "500":
           description: Internal Server Error
       summary: join fund by invite code
+      tags:
+      - fund
+  /api/v1/fund/list:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Pagination
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.Pagination'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.Fund'
+            type: array
+        "400":
+          description: Bad Request
+        "401":
+          description: Unauthorized
+        "500":
+          description: Internal Server Error
+      summary: get funds by current user iid
       tags:
       - fund
   /api/v1/fund/member:
@@ -490,8 +596,64 @@ paths:
       summary: get fund members
       tags:
       - fund
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Fund id
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.FundRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.User'
+            type: array
+        "400":
+          description: Bad Request
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      summary: get fund members
+      tags:
+      - fund
   /api/v1/fund/purchases:
     get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Fund id and pagination
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.FundPaginationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.Purchase'
+            type: array
+        "400":
+          description: Bad Request
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      summary: get fund purchase history
+      tags:
+      - fund
+    post:
       consumes:
       - application/json
       parameters:
@@ -574,6 +736,35 @@ paths:
       summary: create and add virtual user to fund
       tags:
       - fund
+  /api/v1/fund/virtual-users/list:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Fund id and pagination
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/domain.FundPaginationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.User'
+            type: array
+        "400":
+          description: Bad Request
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      summary: get virtual fund members
+      tags:
+      - fund
   /api/v1/ping:
     get:
       consumes:
@@ -590,4 +781,35 @@ paths:
       summary: ping
       tags:
       - fund
+  /api/v1/user/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.User'
+        "401":
+          description: Unauthorized
+        "404":
+          description: Not Found
+      summary: Get current authenticated user info
+      tags:
+      - user
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.User'
+        "401":
+          description: Unauthorized
+        "404":
+          description: Not Found
+      summary: Get current authenticated user info
+      tags:
+      - user
 swagger: "2.0"

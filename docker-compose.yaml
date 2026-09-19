@@ -51,8 +51,8 @@ services:
       rabbitmq:
         condition: service_started
     volumes:
-      - ${PROJECT_ROOT}/backend/out/web:/app/out
-    user: "${UID}:${GID}"
+      - ./backend/out/web:/app/out
+    user: "${UID:-1000}:${GID:-1000}"
     environment:
       TOKEN: ${TOKEN}
       BOT_NAME: ${BOT_NAME}
@@ -87,8 +87,8 @@ services:
       rabbitmq:
         condition: service_started
     volumes:
-      - ${PROJECT_ROOT}/backend/out/bot:/app/out
-    user: "${UID}:${GID}"
+      - ./backend/out/bot:/app/out
+    user: "${UID:-1000}:${GID:-1000}"
     environment:
       TOKEN: ${TOKEN}
       BOT_NAME: ${BOT_NAME}
@@ -108,9 +108,9 @@ services:
       GRPC_PORT: ${GRPC_PORT}
   migrate:
     image: migrate/migrate:v4.19.1
-    user: "${UID}:${GID}"
+    user: "${UID:-1000}:${GID:-1000}"
     volumes:
-      - ${PROJECT_ROOT}/backend/internal/repository/postgres_migrations:/migrations
+      - ./backend/internal/repository/postgres_migrations:/migrations
   redis:
     image: redis:8.6.2-alpine
     container_name: split_core_redis

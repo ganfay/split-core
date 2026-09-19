@@ -2,15 +2,15 @@ FROM node:24-alpine AS builder
 
 WORKDIR /app
 
-COPY frontend/package.json ./
-RUN npm install
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+RUN corepack enable && pnpm install --frozen-lockfile
 
 COPY frontend/ .
 
 ARG VITE_BOT_NAME=SplitCoreBot
 ENV VITE_BOT_NAME=${VITE_BOT_NAME}
 
-RUN npm run build
+RUN pnpm build
 
 FROM nginx:1.29-alpine
 
