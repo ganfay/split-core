@@ -2,9 +2,16 @@ name: SplitCore CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "master", "main" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "master", "main" ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-and-lint:
@@ -19,6 +26,10 @@ jobs:
         with:
           go-version: '1.26.2'
           cache: true
+          cache-dependency-path: |
+            backend/go.sum
+            notifier/go.sum
+            proto/go.sum
 
       - name: Run golangci-lint (backend)
         uses: golangci/golangci-lint-action@v9
@@ -32,11 +43,84 @@ jobs:
           version: latest
           working-directory: ./notifier
 
+      - name: Run go vet (proto)
+        working-directory: ./proto
+        run: go vet ./...
+
+      - name: Run go vet (backend)
+        working-directory: ./backend
+        run: go vet ./...
+
+      - name: Run go vet (notifier)
+        working-directory: ./notifier
+        run: go vet ./...
+
       - name: Run Tests (backend)
         working-directory: ./backend
-        run: go test -v ./...
+        run: go test -race -v ./...
 
+      - name: Run Tests (notifier)
+        working-directory: ./notifier
+        run: go test -race -v ./...
 
-    # - name: Run Tests (notifier)
-    #   working-directory: ./notifier
-    #   run: go test -v ./...
+  frontend-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: corepack enable && pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm exec tsc -b
+
+      - name: Build
+        run: pnpm build
+
+  infra-validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Validate dev compose config
+        run: docker compose config --quiet
+
+      - name: Validate prod compose config
+        run: |
+          IMAGE_TAG=ci-validate \
+          FRONTEND_DOMAIN=app.example.com \
+          BACKEND_DOMAIN=api.example.com \
+          ACME_EMAIL=ci@example.com \
+          TOKEN=ci-dummy-token \
+          BOT_NAME=SplitCoreBot \
+          PG_USER=ci_user \
+          PG_PASS=ci_pass \
+          PG_DB=ci_db \
+          REDIS_PASS=ci_redis_pass \
+          RMQ_USER=ci_rmq_user \
+          RMQ_PASS=ci_rmq_pass \
+          JWT_SECRET_ACCESS=ci_access_secret \
+          JWT_SECRET_REFRESH=ci_refresh_secret \
+          docker compose -f docker-compose.prod.yaml config --quiet
+
+      - name: Validate Caddyfile.prod
+        run: |
+          docker run --rm \
+            -e FRONTEND_DOMAIN=app.example.com \
+            -e BACKEND_DOMAIN=api.example.com \
+            -e ACME_EMAIL=ci@example.com \
+            -v "${{ github.workspace }}/Caddyfile.prod:/etc/caddy/Caddyfile:ro" \
+            caddy:2.10-alpine \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
