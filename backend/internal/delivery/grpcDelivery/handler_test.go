@@ -33,8 +33,8 @@ func (m *mockFundUC) GetInfo(ctx context.Context, reqFund *domain.Fund) (*domain
 func (m *mockFundUC) GetFundsByUserID(_ context.Context, _ int64, _, _ int) ([]domain.Fund, error) {
 	return nil, nil
 }
-func (m *mockFundUC) AddMember(_ context.Context, _ int, _ int64) error          { return nil }
-func (m *mockFundUC) IsMember(_ context.Context, _ int, _ int64) (bool, error)   { return true, nil }
+func (m *mockFundUC) AddMember(_ context.Context, _ int, _ int64) error        { return nil }
+func (m *mockFundUC) IsMember(_ context.Context, _ int, _ int64) (bool, error) { return true, nil }
 func (m *mockFundUC) GetMembers(ctx context.Context, fundID int) ([]domain.User, error) {
 	return m.getMembersFn(ctx, fundID)
 }
