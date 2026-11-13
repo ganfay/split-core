@@ -1,6 +1,18 @@
+export type SessionStatus = "pending" | "authenticated" | (string & {});
+
 export type Session = {
   uuid: string;
-  status: "pending" | "authenticated" | string;
+  status: SessionStatus;
+  access_token?: string;
+  refresh_token?: string;
+  firstname?: string;
+  username?: string;
+  iid?: number;
+  tg_id?: number;
+};
+
+export type SessionCheckRequest = {
+  uuid: string;
 };
 
 export type Tokens = {
@@ -15,9 +27,45 @@ export type Fund = {
   created_at: string;
 };
 
+export type PaginationRequest = {
+  limit: number;
+  offset: number;
+};
+
+export type FundRequest = {
+  id: number;
+  invite_code?: string;
+};
+
+export type JoinFundRequest = {
+  invite_code: string;
+};
+
+export type FundPaginationRequest = {
+  fund_id: number;
+  limit: number;
+  offset: number;
+};
+
+export type VirtualUserRequest = {
+  fund_id: number;
+  first_name: string;
+};
+
+export type RemoveUserRequest = {
+  fund_id: number;
+  user_id: number;
+};
+
+export type AddExpenseRequest = {
+  fund_id: number;
+  description: string;
+  cost: number;
+};
+
 export type User = {
   id: number;
-  tg_id?: number;
+  tg_id?: number | null;
   username: string;
   first_name: string;
   is_virtual: boolean;
@@ -28,6 +76,12 @@ export type Debt = {
   from_id: number;
   to_id: number;
   amount: number;
+};
+
+export type SettlementResponse = {
+  total_amount: number;
+  average: number;
+  debts: Debt[] | null;
 };
 
 export type Settlement = {
@@ -43,4 +97,8 @@ export type Purchase = {
   amount: number;
   description: string;
   created_at: string;
+};
+
+export type ResponseError = {
+  error: string;
 };
