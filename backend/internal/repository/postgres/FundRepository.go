@@ -2,12 +2,15 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/ganfay/split-core/internal/domain"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -22,6 +25,9 @@ func NewFundRepository(pool *pgxpool.Pool) *FundRepository {
 }
 
 func (r *FundRepository) CreateFund(ctx context.Context, fund *domain.Fund) (*domain.Fund, error) {
+	if fund == nil {
+		return nil, fmt.Errorf("%w: fund is nil", domain.ErrInvalidInput)
+	}
 	tx, err := r.DB.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -50,7 +56,7 @@ func (r *FundRepository) CreateFund(ctx context.Context, fund *domain.Fund) (*do
 	if err != nil {
 		return nil, err
 	}
-	return fund, err
+	return fund, nil
 }
 
 func (r *FundRepository) DeleteFund(ctx context.Context, fundID int) error {
@@ -60,6 +66,9 @@ func (r *FundRepository) DeleteFund(ctx context.Context, fundID int) error {
 }
 
 func (r *FundRepository) GetInfo(ctx context.Context, reqFund *domain.Fund) (*domain.Fund, error) {
+	if reqFund == nil {
+		return nil, fmt.Errorf("%w: reqFund is nil", domain.ErrInvalidInput)
+	}
 	var fund domain.Fund
 	query := `
 		SELECT id, name, author_id, invite_code, created_at 
@@ -70,6 +79,9 @@ func (r *FundRepository) GetInfo(ctx context.Context, reqFund *domain.Fund) (*do
 	err := r.DB.QueryRow(ctx, query, reqFund.ID, reqFund.InviteCode).Scan(
 		&fund.ID, &fund.Name, &fund.AuthorID, &fund.InviteCode, &fund.CreatedAt)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("%w: %w", domain.ErrNotFound, err)
+		}
 		return nil, err
 	}
 	return &fund, nil
@@ -89,7 +101,9 @@ func (r *FundRepository) GetByUserID(ctx context.Context, userID int64, limit in
 		slog.Debug(err.Error())
 		return nil, err
 	}
-	var funds []domain.Fund
+	defer allFunds.Close()
+
+	funds := make([]domain.Fund, 0)
 	for allFunds.Next() {
 		var fund domain.Fund
 		err = allFunds.Scan(&fund.ID, &fund.Name, &fund.AuthorID, &fund.InviteCode, &fund.CreatedAt)
@@ -98,14 +112,23 @@ func (r *FundRepository) GetByUserID(ctx context.Context, userID int64, limit in
 		}
 		funds = append(funds, fund)
 	}
-	defer allFunds.Close()
+	if err := allFunds.Err(); err != nil {
+		return nil, err
+	}
 	return funds, nil
 }
 
 func (r *FundRepository) AddMember(ctx context.Context, fundID int, userID int64) error {
 	queryMember := `INSERT INTO app.fund_members (fund_id, user_id) VALUES ($1, $2)`
 	_, err := r.DB.Exec(ctx, queryMember, fundID, userID)
-	return err
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return fmt.Errorf("%w: %w", domain.ErrAlreadyMember, err)
+		}
+		return err
+	}
+	return nil
 }
 
 func (r *FundRepository) IsMember(ctx context.Context, fundID int, userID int64) (bool, error) {
@@ -120,12 +143,12 @@ func (r *FundRepository) IsMember(ctx context.Context, fundID int, userID int64)
 }
 
 func (r *FundRepository) GetMembers(ctx context.Context, fundID int) ([]domain.User, error) {
-	var users []domain.User
+	users := make([]domain.User, 0)
 
-	query := `SELECT f.user_id, COALESCE(u.tg_id, -1), COALESCE(u.username, ''), first_name, is_virtual, created_at
+	query := `SELECT f.user_id, u.tg_id, u.username, u.first_name, u.is_virtual, u.created_at
 				FROM app.fund_members f
 				JOIN app.users u ON f.user_id = u.id
-				WHERE fund_id = $1`
+				WHERE f.fund_id = $1`
 
 	rows, err := r.DB.Query(ctx, query, fundID)
 	if err != nil {
@@ -134,18 +157,24 @@ func (r *FundRepository) GetMembers(ctx context.Context, fundID int) ([]domain.U
 	defer rows.Close()
 	for rows.Next() {
 		var user domain.User
-		user.TgID = new(int64)
-		err = rows.Scan(&user.ID, user.TgID, &user.Username, &user.FirstName, &user.IsVirtual, &user.CreatedAt)
+		var username sql.NullString
+		var isVirtual sql.NullBool
+		err = rows.Scan(&user.ID, &user.TgID, &username, &user.FirstName, &isVirtual, &user.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
+		user.Username = username.String
+		user.IsVirtual = isVirtual.Bool
 		users = append(users, user)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return users, nil
 }
 
 func (r *FundRepository) GetVirtualUsers(ctx context.Context, fundID int, offset, limit int) ([]domain.User, error) {
-	var users []domain.User
+	users := make([]domain.User, 0)
 	query := `SELECT fm.user_id, u.first_name
 FROM app.fund_members fm 
 JOIN app.users u ON fm.user_id = u.id
@@ -162,7 +191,11 @@ LIMIT $2 OFFSET $3`
 		if err != nil {
 			return nil, err
 		}
+		user.IsVirtual = true
 		users = append(users, user)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return users, nil
 }

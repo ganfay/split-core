@@ -3,13 +3,15 @@ package usecase
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"math"
+	"time"
 
 	"github.com/ganfay/split-core/internal/domain"
 	"github.com/ganfay/split-core/internal/repository"
 )
+
+const publishEventTimeout = 5 * time.Second
 
 type FundUsecase struct {
 	fundRepository     repository.FundRepository
@@ -28,10 +30,12 @@ func NewFundUsecase(fr repository.FundRepository, pr repository.PurchaseReposito
 }
 
 func (u *FundUsecase) GetBalance(ctx context.Context, fundID int) (*domain.Settlement, error) {
-	slog.Debug("request", "fundID", fundID, "maxint", math.MaxInt, "ctx", ctx)
+	if fundID <= 0 {
+		return nil, domain.ErrInvalidInput
+	}
 	purchases, err := u.purchaseRepository.GetPurchasesByFundAll(ctx, fundID)
 	if err != nil {
-		slog.Debug("GetBalance", "purchases", purchases, "error", err)
+		slog.Debug("GetBalance", "fundID", fundID, "error", err)
 		return nil, err
 	}
 	members, err := u.fundRepository.GetMembers(ctx, fundID)
@@ -51,10 +55,28 @@ func calculateSettlements(purchases []domain.Purchase, members []domain.User) *d
 		m[purchase.Payer.ID] += purchase.Amount
 	}
 
-	averageAmount := totalAmount / float64(len(members))
+	seen := make(map[int64]struct{}, len(members))
+	uniqueMembers := make([]domain.User, 0, len(members))
+	for _, member := range members {
+		if _, exists := seen[member.ID]; !exists {
+			seen[member.ID] = struct{}{}
+			uniqueMembers = append(uniqueMembers, member)
+		}
+	}
+
+	debts := make([]domain.Debt, 0)
+	if len(uniqueMembers) == 0 {
+		return &domain.Settlement{
+			TotalAmount: totalAmount,
+			Debts:       debts,
+			Average:     0,
+		}
+	}
+
+	averageAmount := totalAmount / float64(len(uniqueMembers))
 	var creditors []int64
 	var debtors []int64
-	for _, member := range members {
+	for _, member := range uniqueMembers {
 		m[member.ID] = m[member.ID] - averageAmount
 
 		bal := m[member.ID]
@@ -64,7 +86,6 @@ func calculateSettlements(purchases []domain.Purchase, members []domain.User) *d
 			debtors = append(debtors, member.ID)
 		}
 	}
-	var debts []domain.Debt
 	// from d -> c
 	for len(debtors) > 0 && len(creditors) > 0 {
 		d := debtors[0]
@@ -89,30 +110,42 @@ func calculateSettlements(purchases []domain.Purchase, members []domain.User) *d
 			creditors = creditors[1:]
 		}
 	}
-	var settlement = &domain.Settlement{
+	return &domain.Settlement{
 		TotalAmount: totalAmount,
 		Debts:       debts,
 		Average:     averageAmount,
 	}
-	return settlement
 }
 
 func (u *FundUsecase) AddExpense(ctx context.Context, fundID int, id int64, desc string, cost float64) error {
+	if fundID <= 0 || id <= 0 {
+		return domain.ErrInvalidInput
+	}
+	if math.IsNaN(cost) || math.IsInf(cost, 0) || cost <= 0 {
+		return domain.ErrInvalidAmount
+	}
 	isMember, err := u.fundRepository.IsMember(ctx, fundID, id)
-	if err != nil || !isMember {
+	if err != nil {
 		return err
 	}
-	if cost <= 0 {
-		return errors.New("invalid amount")
+	if !isMember {
+		return domain.ErrForbidden
 	}
-	if len(desc) > 200 {
-		desc = desc[:197] + "..."
+
+	runes := []rune(desc)
+	if len(runes) > 200 {
+		desc = string(runes[:197]) + "..."
 	}
 
 	err = u.purchaseRepository.CreatePurchase(ctx, fundID, cost, id, desc)
 	if err != nil {
 		return err
 	}
+
+	if u.eventPublisher == nil {
+		return nil
+	}
+
 	event := ExpenseCreatedEvent{
 		CreatorID: id,
 		FundID:    int64(fundID),
@@ -122,27 +155,36 @@ func (u *FundUsecase) AddExpense(ctx context.Context, fundID int, id int64, desc
 	body, err := json.Marshal(event)
 	if err != nil {
 		slog.Error("failed to marshal event", "err", err)
-		return err
+		return nil
 	}
-	err = u.eventPublisher.Publish(ctx, "test", body, "expense_created")
-	if err != nil {
-		return err
+
+	// Expense is already persisted; keep event publishing bounded and non-fatal to avoid duplicate retries.
+	pubCtx, cancel := context.WithTimeout(ctx, publishEventTimeout)
+	defer cancel()
+	if err = u.eventPublisher.Publish(pubCtx, "test", body, "expense_created"); err != nil {
+		slog.Error("failed to publish expense_created event", "err", err, "fund_id", fundID, "creator_id", id)
 	}
 	return nil
 }
 
 func (u *FundUsecase) CreateFund(ctx context.Context, fund *domain.Fund) (*domain.Fund, error) {
+	if fund == nil {
+		return nil, domain.ErrInvalidInput
+	}
 	return u.fundRepository.CreateFund(ctx, fund)
 }
 
 func (u *FundUsecase) DeleteFund(ctx context.Context, fundID int, IID int64) error {
+	if fundID <= 0 {
+		return domain.ErrInvalidInput
+	}
 	fund := &domain.Fund{ID: fundID}
 	fund, err := u.fundRepository.GetInfo(ctx, fund)
 	if err != nil {
 		return err
 	}
 	if fund.AuthorID != IID {
-		return errors.New("forbidden")
+		return domain.ErrForbidden
 	}
 	return u.fundRepository.DeleteFund(ctx, fundID)
 }

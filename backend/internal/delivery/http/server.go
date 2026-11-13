@@ -14,10 +14,12 @@ type Server struct {
 func NewServer(addr string, handler http.Handler) *Server {
 	return &Server{
 		httpServer: &http.Server{
-			Addr:         addr,
-			Handler:      handler,
-			ReadTimeout:  5 * time.Second,
-			WriteTimeout: 10 * time.Second,
+			Addr:              addr,
+			Handler:           handler,
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       5 * time.Second,
+			WriteTimeout:      10 * time.Second,
+			IdleTimeout:       60 * time.Second,
 		},
 	}
 }
@@ -28,5 +30,7 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Stop() error {
-	return s.httpServer.Shutdown(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return s.httpServer.Shutdown(ctx)
 }

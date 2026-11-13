@@ -1,9 +1,10 @@
 package config
 
 import (
-	"fmt"
 	"log"
 	"log/slog"
+	"net"
+	"net/url"
 
 	"github.com/ilyakaznacheev/cleanenv"
 )
@@ -36,18 +37,41 @@ type RedisConfig struct {
 type RabbitMQConfig struct {
 	User     string `env:"RMQ_USER" env-required:"true"`
 	Password string `env:"RMQ_PASS" env-required:"true"`
+	Host     string `env:"RMQ_HOST" env-default:"rabbitmq"`
+	Port     string `env:"RMQ_PORT" env-default:"5672"`
 }
 
 func (r RabbitMQConfig) UrlRmq() string {
-	return fmt.Sprintf("amqp://%s:%s@rabbitmq:5672/", r.User, r.Password)
+	host := r.Host
+	if host == "" {
+		host = "rabbitmq"
+	}
+	port := r.Port
+	if port == "" {
+		port = "5672"
+	}
+	u := &url.URL{
+		Scheme: "amqp",
+		User:   url.UserPassword(r.User, r.Password),
+		Host:   net.JoinHostPort(host, port),
+		Path:   "/",
+	}
+	return u.String()
 }
 
 func (p PGConfig) URL() string {
-	return fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=disable", p.User, p.Password, p.Host, p.Port, p.Database)
+	u := &url.URL{
+		Scheme:   "postgresql",
+		User:     url.UserPassword(p.User, p.Password),
+		Host:     net.JoinHostPort(p.Host, p.Port),
+		Path:     p.Database,
+		RawQuery: "sslmode=disable",
+	}
+	return u.String()
 }
 
 func (r RedisConfig) Addr() string {
-	return fmt.Sprintf("%s:%s", r.Host, r.Port)
+	return net.JoinHostPort(r.Host, r.Port)
 }
 
 func LoadConfig() *Config {

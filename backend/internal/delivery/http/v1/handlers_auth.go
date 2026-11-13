@@ -1,13 +1,14 @@
 package v1
 
 import (
-	"context"
-	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/ganfay/split-core/internal/domain"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 // CreateSession
@@ -20,29 +21,23 @@ import (
 // @Success      200 {string} domain.Session true
 // @Failure      500
 // @Router       /api/v1/auth/telegram/init [post]
-func (s *Handler) CreateSession(w http.ResponseWriter, _ *http.Request) {
+func (s *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	u := uuid.New()
-	ctx := context.Background()
-	var session domain.Session
-	session.Uuid = u.String()
-	session.Status = "pending"
+	ctx, cancel := requestContext(r)
+	defer cancel()
+
+	session := domain.Session{
+		Uuid:   u.String(),
+		Status: "pending",
+	}
 	err := s.stateUC.Session(ctx, session)
 	if err != nil {
 		slog.Error("Failed to create session ", "err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	var resp domain.Session
-	resp.Uuid = u.String()
-	resp.Status = "pending"
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(resp)
-	slog.Debug("Success create session ", "uuid", resp.Uuid)
-	if err != nil {
-		slog.Error("[HANDLER CREATESESSION] Failed to encode json ", "err", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	slog.Debug("Success create session ", "uuid", session.Uuid)
+	writeJSON(w, http.StatusOK, session)
 }
 
 // CheckSession
@@ -60,28 +55,30 @@ func (s *Handler) CreateSession(w http.ResponseWriter, _ *http.Request) {
 // @Router       /api/v1/auth/telegram/status [post]
 func (s *Handler) CheckSession(w http.ResponseWriter, r *http.Request) {
 	var req domain.SessionCheckRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		slog.Error("[HANDLER CHECKSESSION] Failed to decode json ", "err", err)
+	if !decodeJSON(w, r, &req) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	ctx := context.Background()
+	req.Uuid = strings.TrimSpace(req.Uuid)
+	if req.Uuid == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := requestContext(r)
+	defer cancel()
 
 	session, err := s.stateUC.GetSessionCtx(ctx, req.Uuid)
 	if err != nil {
 		slog.Error("[HANDLER CHECKSESSION] Failed to get session ", "err", err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	slog.Debug("Success check session ", "uuid", session.Uuid)
-	err = json.NewEncoder(w).Encode(session.Status)
-	if err != nil {
-		slog.Error("[HANDLER CHECKSESSION] Failed to encode json ", "err", err)
+		if errors.Is(err, redis.Nil) {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	slog.Debug("Success check session ", "uuid", session.Uuid)
+	writeJSON(w, http.StatusOK, session.Status)
 }
 
 // GenerateAllJWTTokens
@@ -97,17 +94,26 @@ func (s *Handler) CheckSession(w http.ResponseWriter, r *http.Request) {
 // @Router       /api/v1/auth/telegram/tokens [post]
 func (s *Handler) GenerateAllJWTTokens(w http.ResponseWriter, r *http.Request) {
 	var req domain.SessionCheckRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		slog.Error("Error decoding json ", "err", err)
+	if !decodeJSON(w, r, &req) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	ctx := context.Background()
+	req.Uuid = strings.TrimSpace(req.Uuid)
+	if req.Uuid == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := requestContext(r)
+	defer cancel()
+
 	session, err := s.stateUC.GetSessionCtx(ctx, req.Uuid)
 	if err != nil {
 		slog.Error("Error getting session ", "err", err)
-		w.WriteHeader(http.StatusBadRequest)
+		if errors.Is(err, redis.Nil) {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	if session.Status != "authenticated" {
@@ -141,13 +147,7 @@ func (s *Handler) GenerateAllJWTTokens(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	}
 	http.SetCookie(w, cookie)
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(resp)
-	if err != nil {
-		slog.Error("[HANDLER JWT] Failed to encode json ", "err", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // GetAccessToken
@@ -161,14 +161,13 @@ func (s *Handler) GenerateAllJWTTokens(w http.ResponseWriter, r *http.Request) {
 // @Failure      500
 // @Router       /api/v1/auth/telegram/access [post]
 func (s *Handler) GetAccessToken(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
 	cookie, err := r.Cookie("refresh_token")
 	if err != nil {
 		slog.Error("GetAccessToken: Failed to get cookie ", "err", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	slog.Debug("[HANDLER] GetAccessToken", "cookie", cookie, "ctx", ctx)
+	slog.Debug("[HANDLER] GetAccessToken")
 	iid, err := ParseJWTRefresh(cookie.Value)
 	if err != nil {
 		slog.Error("GetAccessToken: Failed to parse jwt refresh ", "err", err)
@@ -181,14 +180,8 @@ func (s *Handler) GetAccessToken(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
 	resp := domain.Tokens{
 		AccessToken: jwt,
 	}
-	err = json.NewEncoder(w).Encode(resp)
-	if err != nil {
-		slog.Error("GetAccessToken: Failed to encode json ", "err", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	writeJSON(w, http.StatusOK, resp)
 }

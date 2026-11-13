@@ -4,15 +4,20 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"strings"
 )
+
+type contextKey string
+
+const userIDContextKey contextKey = "id"
 
 func Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		slog.Info("Incoming request", "method", r.Method, "path", r.URL.Path)
 		defer func() {
 			if err := recover(); err != nil {
-				slog.Error("Panic caught in middleware", "error", err)
+				slog.Error("Panic caught in middleware", "error", err, "stack", string(debug.Stack()))
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			}
 		}()
@@ -34,7 +39,7 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}
-		ctx := context.WithValue(r.Context(), "id", idd)
+		ctx := context.WithValue(r.Context(), userIDContextKey, idd)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
