@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"log"
 	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/ganfay/split-notify/internal/client"
 	"github.com/ganfay/split-notify/internal/config"
@@ -12,27 +15,48 @@ import (
 )
 
 func main() {
-	cfg := config.LoadConfig()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-	coreClient, err := client.NewCoreClient(fmt.Sprintf("bot%v", cfg.GRpcPort))
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalln("Main: Error init coreClient")
-		return
+		slog.Error("failed to load config", "err", err)
+		os.Exit(1)
 	}
-	defer func(coreClient *client.CoreClient) {
-		err = coreClient.Close()
-		if err != nil {
-			slog.Error("failed to close core client", "err", err)
+
+	if err := run(ctx, cfg); err != nil {
+		slog.Error("notifier exited with error", "err", err)
+		os.Exit(1)
+	}
+	slog.Info("notifier stopped gracefully")
+}
+
+func run(ctx context.Context, cfg *config.Config) error {
+	if cfg == nil {
+		return fmt.Errorf("main: nil config")
+	}
+
+	coreClient, err := client.NewCoreClient(cfg.GRpcTarget())
+	if err != nil {
+		return fmt.Errorf("main: init core client: %w", err)
+	}
+	defer func() {
+		if closeErr := coreClient.Close(); closeErr != nil {
+			slog.Error("failed to close core client", "err", closeErr)
 		}
-	}(coreClient)
+	}()
 
 	proc := processor.NewProcessor(coreClient)
 
-	cons, err := consumer.NewConsumer(cfg.RabbitMQ.UrlRmq(), "test")
+	cons, err := consumer.NewLazyConsumer(cfg.RabbitMQ.UrlRmq(), cfg.RabbitMQ.Queue)
 	if err != nil {
-		log.Fatalf("Main: Consumer error. Error details: %v", err)
-		return
+		return fmt.Errorf("main: init consumer: %w", err)
 	}
-	defer cons.Close()
-	cons.Start(proc)
+	defer func() {
+		if closeErr := cons.Close(); closeErr != nil {
+			slog.Error("failed to close consumer", "err", closeErr)
+		}
+	}()
+
+	return cons.Start(ctx, proc)
 }

@@ -5,23 +5,45 @@
 {$FRONTEND_DOMAIN} {
 	encode zstd gzip
 
+	@spa not path /api/*
+
 	header {
+		defer
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
 	}
 
-	reverse_proxy frontend:80
+	header @spa {
+		defer
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+	}
+
+	# Proxy /api/* directly to web:8080 so Caddy preserves X-Forwarded-Proto: https
+	# (avoiding the extra Nginx hop that overwrites X-Forwarded-Proto with http).
+	handle /api/* {
+		reverse_proxy web:8080
+	}
+
+	handle {
+		reverse_proxy frontend:80
+	}
 }
 
 {$BACKEND_DOMAIN} {
 	encode zstd gzip
 
 	header {
+		defer
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
 	}
 
 	reverse_proxy web:8080

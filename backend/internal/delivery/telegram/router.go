@@ -28,7 +28,7 @@ func (h *BotHandler) SetupRegister(b *tele.Bot) {
 	b.Handle("\f"+CommandPrevRVU, h.HandleWaitRemoveUser)
 	b.Handle("\f"+CommandRemoveUser, h.HandleRemoveVUser)
 	b.Handle("\f"+CommandDelete, h.HandleDeleteFund)
-	b.Handle("\f"+CommandNo, h.HandleViewFund)
+	b.Handle("\f"+CommandNo, h.HandleFund)
 	b.Handle("\f"+CommandYes, h.DeleteFund)
 	b.Handle(tele.OnText, h.OnText)
 	slog.Info("Setting up handlers")

@@ -6,14 +6,78 @@ on:
 
 permissions:
   contents: read
-  packages: write
+
+concurrency:
+  group: deploy-master
+  cancel-in-progress: false
 
 jobs:
-  build-and-push:
+  verify:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6.4.0
+        with:
+          go-version: '1.26.2'
+          cache: true
+          cache-dependency-path: |
+            backend/go.sum
+            notifier/go.sum
+            proto/go.sum
+
+      - name: Run Tests (backend)
+        working-directory: ./backend
+        run: go test -race -v ./...
+
+      - name: Run Tests (notifier)
+        working-directory: ./notifier
+        run: go test -race -v ./...
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Frontend typecheck and build
+        working-directory: ./frontend
+        run: corepack enable && pnpm install --frozen-lockfile && pnpm exec tsc -b && pnpm build
+
+      - name: Validate compose configs
+        run: |
+          docker compose config --quiet
+          IMAGE_TAG="${{ github.sha }}" \
+          FRONTEND_DOMAIN=app.example.com \
+          BACKEND_DOMAIN=api.example.com \
+          ACME_EMAIL=ci@example.com \
+          TOKEN=ci-dummy-token \
+          BOT_NAME=SplitCoreBot \
+          PG_USER=ci_user \
+          PG_PASS=ci_pass \
+          PG_DB=ci_db \
+          REDIS_PASS=ci_redis_pass \
+          RMQ_USER=ci_rmq_user \
+          RMQ_PASS=ci_rmq_pass \
+          JWT_SECRET_ACCESS=ci_access_secret \
+          JWT_SECRET_REFRESH=ci_refresh_secret \
+          docker compose -f docker-compose.prod.yaml config --quiet
+
+  build-and-push:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -21,15 +85,19 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and Push Web
         uses: docker/build-push-action@v5
         with:
           context: .
           file: backend/Dockerfile.web
           push: true
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
           tags: |
-            ghcr.io/ganfay/split-core/web:latest
+            ghcr.io/ganfay/split-core/web:${{ github.sha }}
             ghcr.io/ganfay/split-core/web:1.2.0
+            ghcr.io/ganfay/split-core/web:latest
 
       - name: Build and Push Bot
         uses: docker/build-push-action@v5
@@ -37,9 +105,12 @@ jobs:
           context: .
           file: backend/Dockerfile.bot
           push: true
+          cache-from: type=gha,scope=bot
+          cache-to: type=gha,mode=max,scope=bot
           tags: |
-            ghcr.io/ganfay/split-core/bot:latest
+            ghcr.io/ganfay/split-core/bot:${{ github.sha }}
             ghcr.io/ganfay/split-core/bot:1.2.0
+            ghcr.io/ganfay/split-core/bot:latest
 
       - name: Build and Push Notifier
         uses: docker/build-push-action@v5
@@ -47,9 +118,12 @@ jobs:
           context: .
           file: notifier/Dockerfile
           push: true
+          cache-from: type=gha,scope=notify
+          cache-to: type=gha,mode=max,scope=notify
           tags: |
-            ghcr.io/ganfay/split-core/notify:latest
+            ghcr.io/ganfay/split-core/notify:${{ github.sha }}
             ghcr.io/ganfay/split-core/notify:1.2.0
+            ghcr.io/ganfay/split-core/notify:latest
 
       - name: Build and Push Frontend
         uses: docker/build-push-action@v5
@@ -57,30 +131,46 @@ jobs:
           context: .
           file: frontend/Dockerfile
           push: true
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
           build-args: |
-            VITE_BOT_NAME=${{ secrets.BOT_NAME }}
+            VITE_BOT_NAME=${{ secrets.BOT_NAME || 'SplitCoreBot' }}
           tags: |
-            ghcr.io/ganfay/split-core/frontend:latest
+            ghcr.io/ganfay/split-core/frontend:${{ github.sha }}
             ghcr.io/ganfay/split-core/frontend:1.2.0
+            ghcr.io/ganfay/split-core/frontend:latest
 
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
     steps:
       - name: Deploy on Server via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          GHCR_USER: ${{ github.actor }}
+          SERVER_PROJECT_DIR: ${{ secrets.SERVER_PROJECT_DIR }}
+          IMAGE_TAG: ${{ github.sha }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           passphrase: ${{ secrets.SERVER_SSH_PASSPHRASE }}
+          script_stop: true
+          envs: GHCR_PAT,GHCR_USER,SERVER_PROJECT_DIR,IMAGE_TAG
           script: |
-            cd ${{ secrets.SERVER_PROJECT_DIR || '/home/user/split-core' }}
-            git pull
-            if [ -n "${{ secrets.GHCR_PAT }}" ]; then
-              echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            set -eu
+            PROJECT_DIR="${SERVER_PROJECT_DIR:-/home/user/split-core}"
+            cd "$PROJECT_DIR"
+            git pull --ff-only
+            if [ -n "${GHCR_PAT:-}" ]; then
+              printf '%s\n' "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             fi
+            export IMAGE_TAG
             docker compose --env-file backend/.env -f docker-compose.prod.yaml pull
             docker compose --env-file backend/.env -f docker-compose.prod.yaml --profile tools run --rm migrate
-            docker compose --env-file backend/.env -f docker-compose.prod.yaml up -d
+            docker compose --env-file backend/.env -f docker-compose.prod.yaml up -d --remove-orphans --wait
             docker image prune -f

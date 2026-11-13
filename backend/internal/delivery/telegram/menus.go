@@ -3,7 +3,6 @@ package telegram
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strconv"
 
 	"github.com/ganfay/split-core/internal/domain"
@@ -36,7 +35,11 @@ func (h *BotHandler) BackMenu() *tele.ReplyMarkup {
 func (h *BotHandler) MenuRemoveVUsers(offset int, u []domain.User) *tele.ReplyMarkup {
 	menu := tele.ReplyMarkup{ResizeKeyboard: true}
 	limit := 7
-	btnPrev := menu.Data("⬅️ Prev", CommandPrevRVU, strconv.Itoa(offset-limit))
+	prevOffset := offset - limit
+	if prevOffset < 0 {
+		prevOffset = 0
+	}
+	btnPrev := menu.Data("⬅️ Prev", CommandPrevRVU, strconv.Itoa(prevOffset))
 	btnNext := menu.Data("Next ➡️", CommandNextRVU, strconv.Itoa(offset+limit))
 	btnBack := menu.Data("⬅️⬅️Back", CommandBack)
 	var rows []tele.Row
@@ -76,7 +79,11 @@ func (h *BotHandler) MenuMembersView() *tele.ReplyMarkup {
 func (h *BotHandler) MenuViewFundLogs(offset int, p []domain.Purchase) *tele.ReplyMarkup {
 	menu := tele.ReplyMarkup{ResizeKeyboard: true}
 	limit := 7
-	btnPrev := menu.Data("⬅️ Prev", CommandPreviousVFL, strconv.Itoa(offset-limit))
+	prevOffset := offset - limit
+	if prevOffset < 0 {
+		prevOffset = 0
+	}
+	btnPrev := menu.Data("⬅️ Prev", CommandPreviousVFL, strconv.Itoa(prevOffset))
 	btnNext := menu.Data("Next ➡️", CommandNextVFL, strconv.Itoa(offset+limit))
 	btnBack := menu.Data("⬅️⬅️Back", CommandBack)
 
@@ -85,7 +92,7 @@ func (h *BotHandler) MenuViewFundLogs(offset int, p []domain.Purchase) *tele.Rep
 	if offset > 0 {
 		row = append(row, btnPrev)
 	}
-	if len(p)-offset >= limit {
+	if len(p) == limit {
 		row = append(row, btnNext)
 	}
 	if len(row) != 0 {
@@ -129,34 +136,27 @@ func (h *BotHandler) SureMenu() *tele.ReplyMarkup {
 	return &menu
 }
 
-func (h *BotHandler) MyFundMenu(c tele.Context, offset int) *tele.ReplyMarkup {
-
-	ctx := context.Background()
+func (h *BotHandler) MyFundMenu(ctx context.Context, internalID int64, offset int) (*tele.ReplyMarkup, error) {
+	if offset < 0 {
+		offset = 0
+	}
 	menu := tele.ReplyMarkup{ResizeKeyboard: true}
 	limit := 5
-	userCtx, save, err := h.getUserCtxH(c, ctx)
+	fundsMembers, err := h.fundUC.GetFundsByUserID(ctx, internalID, limit, offset)
 	if err != nil {
-		return &menu
-	}
-	defer save()
-	fundsMembers, err := h.fundUC.GetFundsByUserID(ctx, userCtx.InternalID, limit, offset)
-	if err != nil {
-		err := h.error(c, "Failed to get your funds", err.Error(), Edit)
-		if err != nil {
-			slog.Error(err.Error())
-			return nil
-		}
-		return nil
+		return nil, err
 	}
 	var rows []tele.Row
 	for _, fund := range fundsMembers {
-
 		btn := menu.Data(fund.Name, CommandFund, strconv.Itoa(fund.ID))
 		rows = append(rows, menu.Row(btn))
 	}
 	var navRow []tele.Btn
 	if offset > 0 {
 		prevOffset := offset - limit
+		if prevOffset < 0 {
+			prevOffset = 0
+		}
 		navRow = append(navRow, menu.Data("⬅️ Prev", CommandPreviousMF, fmt.Sprintf("%d", prevOffset)))
 	}
 	if len(fundsMembers) == limit {
@@ -170,11 +170,5 @@ func (h *BotHandler) MyFundMenu(c tele.Context, offset int) *tele.ReplyMarkup {
 	rows = append(rows, menu.Row(menu.Data("🔙🔙Back", CommandBack)))
 
 	menu.Inline(rows...)
-	userCtx, saveCtx, err := h.getUserCtxH(c, ctx)
-	if err != nil {
-		_ = h.error(c, "Failed to get user context", err.Error(), Edit)
-	}
-	defer saveCtx()
-	userCtx.LastMsgID = c.Message().ID
-	return &menu
+	return &menu, nil
 }

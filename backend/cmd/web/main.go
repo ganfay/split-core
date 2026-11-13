@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -36,9 +37,8 @@ func main() {
 	s := myhttp.NewServer(":8080", v1.Middleware(mux))
 
 	go func() {
-		err := s.Start()
-		if err != nil {
-			slog.Error("Error starting server", "err", err)
+		if startErr := s.Start(); startErr != nil && !errors.Is(startErr, http.ErrServerClosed) {
+			slog.Error("Error starting server", "err", startErr)
 		}
 	}()
 
@@ -47,15 +47,13 @@ func main() {
 
 	sign := <-quit
 	slog.Info("Stopping application...", "signal", sign.String())
-	err := s.Stop()
-	if err != nil {
+	if err := s.Stop(); err != nil {
 		slog.Error("Error stopping web server", "err", err)
 	}
 	pool.Close()
 	publisher.Close()
-	err = rdb.Close()
-	if err != nil {
-		panic("Failed to close the redis database: " + err.Error())
+	if err := rdb.Close(); err != nil {
+		slog.Error("Failed to close the redis database", "err", err)
 	}
 	slog.Info("Application stopped gracefully.")
 }

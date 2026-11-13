@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -26,6 +27,7 @@ func main() {
 	settings := tele.Settings{
 		Token:  cfg.BotToken,
 		Poller: &tele.LongPoller{Timeout: 10 * time.Second},
+		Client: &http.Client{Timeout: 20 * time.Second},
 	}
 
 	fundUC, userUC, stateUC, pool, rdb, publisher := helper.Initial(ctx, cfg)
@@ -35,37 +37,36 @@ func main() {
 	b, err := tele.NewBot(settings)
 	if err != nil {
 		slog.Error("Error creating bot", "err", err)
+		pool.Close()
+		publisher.Close()
+		_ = rdb.Close()
 		os.Exit(1)
 	}
 	h.SetupRegister(b)
 
-	grpcServer := grpcDelivery.NewServer(cfg.GRpcPort, *fundUC, b)
+	grpcServer := grpcDelivery.NewServer(cfg.GRpcPort, fundUC, b)
 
 	go func() {
-		if err = grpcServer.Start(); err != nil {
-			slog.Error("gRPC server error", "err", err)
+		if grpcErr := grpcServer.Start(); grpcErr != nil {
+			slog.Error("gRPC server error", "err", grpcErr)
 		}
 	}()
 	go func() {
 		slog.Info("Starting bot", "version", cfg.BotVersion, "env", cfg.Env)
 		b.Start()
 	}()
-	defer grpcServer.Stop()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	sign := <-quit
 	slog.Info("Stopping application...", "signal", sign.String())
-	if err != nil {
-		slog.Error("Error stopping web server", "err", err)
-	}
+	grpcServer.Stop()
 	b.Stop()
 	pool.Close()
 	publisher.Close()
-	err = rdb.Close()
-	if err != nil {
-		panic("Failed to close the redis database: " + err.Error())
+	if closeErr := rdb.Close(); closeErr != nil {
+		slog.Error("Failed to close the redis database", "err", closeErr)
 	}
 	slog.Info("Application stopped gracefully.")
 }

@@ -8,18 +8,37 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/ganfay/split-core/internal/domain"
 	"github.com/ganfay/split-core/internal/pkg/utils"
+	"github.com/redis/go-redis/v9"
 	tele "gopkg.in/telebot.v4"
 )
 
+const telegramOpTimeout = 10 * time.Second
+
+func newOpCtx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), telegramOpTimeout)
+}
+
+func respondCallback(c tele.Context, action string) {
+	if c.Callback() == nil {
+		return
+	}
+	if err := c.Respond(); err != nil {
+		slog.Error("Failed to respond to callback", "action", action, "err", err)
+	}
+}
+
 func (h *BotHandler) HandleStart(c tele.Context) error {
-	ctx := context.Background()
-	var user domain.User
-	user.Username = c.Sender().Username
-	user.FirstName = c.Sender().FirstName
+	if c.Sender() == nil || c.Message() == nil {
+		return nil
+	}
+	ctx, cancel := newOpCtx()
+	defer cancel()
+
 	userStates := domain.UserContext{
 		State:        domain.StateNone,
 		LastMsgID:    c.Message().ID,
@@ -32,7 +51,7 @@ func (h *BotHandler) HandleStart(c tele.Context) error {
 	slog.Debug("Save userctx")
 	userCtx, save, err := h.getUserCtxH(c, ctx)
 	if err != nil {
-		return err
+		return h.error(c, "Internal error, try again later", err.Error(), Reply)
 	}
 	defer save()
 
@@ -42,7 +61,10 @@ func (h *BotHandler) HandleStart(c tele.Context) error {
 		arg := args[0]
 		slog.Debug("Start checking args")
 
-		splitArg := strings.Split(arg, "_")
+		splitArg := strings.SplitN(arg, "_", 2)
+		if len(splitArg) != 2 || splitArg[1] == "" {
+			return c.Send("⚠️ Invalid invite link format.")
+		}
 		switch splitArg[0] {
 		case "invite":
 			// if url invite code
@@ -54,6 +76,9 @@ func (h *BotHandler) HandleStart(c tele.Context) error {
 			}
 			err = h.fundUC.AddMember(ctx, fund.ID, userCtx.InternalID)
 			if err != nil {
+				if errors.Is(err, domain.ErrAlreadyMember) {
+					return c.Reply("You already <b>exist</b> in this fund✅", h.MainMenu(), tele.ModeHTML)
+				}
 				return h.error(c, "Failed to join the fund", err.Error(), Reply)
 			}
 			msg := "Congratulations🎉\n\nYou have successfully joined to the fund😊!\n" +
@@ -73,13 +98,16 @@ func (h *BotHandler) HandleStart(c tele.Context) error {
 			}
 			sessionCtx, err := h.statesUC.GetSessionCtx(ctx, splitArg[1])
 			if err != nil {
-				return err
+				if errors.Is(err, redis.Nil) {
+					return c.Reply("⚠️ Login link expired or invalid. Please request a new one on the web.", h.MainMenu(), tele.ModeHTML)
+				}
+				return h.error(c, "Failed to verify login session", err.Error(), Reply)
 			}
 			slog.Debug("Get session ctx", "status", sessionCtx.Status)
 			err = h.statesUC.Session(ctx, session)
 			if err != nil {
-				slog.Error("[TELEGRAM] Failed to auth]")
-				return err
+				slog.Error("[TELEGRAM] Failed to auth", "err", err)
+				return h.error(c, "Failed to complete login", err.Error(), Reply)
 			}
 
 			msg := "Congratulations🎉\n\nYou have successfully login and link account!\nYou can go to web version or start using app here"
@@ -87,7 +115,6 @@ func (h *BotHandler) HandleStart(c tele.Context) error {
 		default:
 			return c.Send("⚠️ Invalid invite link format.")
 		}
-
 	}
 	msg := "👋 <b>Welcome to SplitCore!</b>\n\n" +
 		"I will help you and your friends easily track shared expenses and settle debts.\n\n" +
@@ -96,32 +123,34 @@ func (h *BotHandler) HandleStart(c tele.Context) error {
 }
 
 func (h *BotHandler) HandleBack(c tele.Context) error {
-	defer func(c tele.Context, resp ...*tele.CallbackResponse) {
-		err := c.Respond(resp...)
-		if err != nil {
-			slog.Error("Error while handling back", "err", err.Error())
-		}
-	}(c)
-	ctx := context.Background()
+	defer respondCallback(c, "back")
+	if c.Sender() == nil {
+		return nil
+	}
+	ctx, cancel := newOpCtx()
+	defer cancel()
+
 	userCtx, save, err := h.getUserCtxH(c, ctx)
 	if err != nil {
 		return h.error(c, "Failed to get user context", err.Error(), Edit)
 	}
-	defer save()
 
 	slog.Debug("Handling back", "state", userCtx.State)
 
 	switch userCtx.State {
 	case domain.StateWaitExpense, domain.StateViewHistory, domain.StateViewSuccessExp, domain.StateViewSettleUp, domain.StateViewMembers, domain.StateWaitDelete:
 		userCtx.State = domain.StateViewFund
+		save()
 		return h.HandleFund(c)
 
 	case domain.StateViewFund, domain.StateDelete:
 		userCtx.State = domain.StateFundMenu
+		save()
 		return h.HandleMyFund(c)
 
 	case domain.StateNone, domain.StateWaitFundName, domain.StateWaitFundJoinCode, domain.StateFundMenu:
 		userCtx.State = domain.StateNone
+		save()
 		msg := "👋 <b>Welcome to SplitCore!</b>\n\n" +
 			"I will help you and your friends easily track shared expenses and settle debts.\n\n" +
 			"👇 <i>Choose an action below to get started:</i>"
@@ -129,21 +158,32 @@ func (h *BotHandler) HandleBack(c tele.Context) error {
 
 	case domain.StateWaitUsername, domain.StateSuccessAVU, domain.StateWaitToRemove:
 		userCtx.State = domain.StateViewMembers
+		save()
 		return h.HandleMembers(c)
 	case domain.StateRemovedSuccess:
 		userCtx.State = domain.StateWaitToRemove
+		save()
 		return h.HandleWaitRemoveUser(c)
 	default:
-		panic("unhandled default case")
+		slog.Warn("Unhandled back state, resetting to main menu", "state", userCtx.State)
+		userCtx.State = domain.StateNone
+		save()
+		msg := "👋 <b>Welcome to SplitCore!</b>\n\n" +
+			"I will help you and your friends easily track shared expenses and settle debts.\n\n" +
+			"👇 <i>Choose an action below to get started:</i>"
+		return c.Edit(msg, h.MainMenu(), tele.ModeHTML)
 	}
 }
 
 func (h *BotHandler) OnText(c tele.Context) error {
-	if err := c.Delete(); err != nil {
-		slog.Error("error delete message", "tg_id", c.Sender().ID, "err", err.Error())
-		return err
+	if c.Sender() == nil || c.Message() == nil {
+		return nil
 	}
-	ctx := context.Background()
+	if err := c.Delete(); err != nil {
+		slog.Warn("error delete message", "tg_id", c.Sender().ID, "err", err.Error())
+	}
+	ctx, cancel := newOpCtx()
+	defer cancel()
 
 	userCtx, save, err := h.getUserCtxH(c, ctx)
 	if err != nil {
@@ -151,42 +191,47 @@ func (h *BotHandler) OnText(c tele.Context) error {
 	}
 	defer save()
 
-	text := c.Text()
-	fullText := strings.TrimSpace(c.Text())
-
-	if fullText == "" {
-		err = errors.New("the name cannot be empty or consist solely of spaces. Please try again")
+	rawText := strings.TrimSpace(c.Text())
+	if rawText == "" {
+		err = errors.New("the input cannot be empty or consist solely of spaces. Please try again")
 		return h.error(c, err.Error(), err.Error(), Edit)
 	}
 
-	if utf8.RuneCountInString(fullText) > 30 {
-		err = errors.New("that name is too long! Let's go with something shorter (up to 30 characters) 😅")
-		return h.error(c, err.Error(), err.Error(), Edit)
-	}
-	fullText = html.EscapeString(fullText)
 	switch userCtx.State {
 	case domain.StateWaitExpense:
-		storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
-		cost, desc, err := utils.ParsePurchase(c.Text())
+		if userCtx.ActiveFundID <= 0 {
+			return h.error(c, "No active fund selected", "active_fund_id <= 0", Edit)
+		}
+		cost, desc, err := utils.ParsePurchase(rawText)
 		if err != nil {
-			return err
+			return h.error(c, html.EscapeString(err.Error()), err.Error(), Edit)
 		}
 		err = h.fundUC.AddExpense(ctx, userCtx.ActiveFundID, userCtx.InternalID, desc, cost)
 		if err != nil {
-			return h.error(c, err.Error(), err.Error(), Edit)
+			return h.error(c, "Failed to add expense", err.Error(), Edit)
 		}
 		userCtx.State = domain.StateViewSuccessExp
-		msg := fmt.Sprintf("✅You successfully added a purchase at your fund\n\nAmount💲: %.2f\nDescription📝: %s", cost, desc)
-		_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
-		return err
+		msg := fmt.Sprintf("✅You successfully added a purchase at your fund\n\nAmount💲: %.2f\nDescription📝: %s", cost, html.EscapeString(desc))
+		ctxMsg, err := h.editOrSend(c, userCtx.LastMsgID, msg, h.BackMenu(), tele.ModeHTML)
+		if err != nil {
+			return err
+		}
+		if ctxMsg != nil {
+			userCtx.LastMsgID = ctxMsg.ID
+		}
+		return nil
 	case domain.StateWaitFundName:
-		InviteCode := utils.GenerateInviteCode(6)
+		if utf8.RuneCountInString(rawText) > 30 {
+			err = errors.New("that name is too long! Let's go with something shorter (up to 30 characters) 😅")
+			return h.error(c, err.Error(), err.Error(), Edit)
+		}
+		inviteCode := utils.GenerateInviteCode(6)
 		botName := os.Getenv("BOT_NAME")
-		InviteCodeInviteURL := utils.GenerateInviteCodeURL(InviteCode, botName)
+		inviteURL := utils.GenerateInviteCodeURL(inviteCode, botName)
 		fund := domain.Fund{
 			AuthorID:   userCtx.InternalID,
-			Name:       text,
-			InviteCode: InviteCode,
+			Name:       rawText,
+			InviteCode: inviteCode,
 		}
 		_, err := h.fundUC.CreateFund(ctx, &fund)
 		if err != nil {
@@ -198,17 +243,26 @@ func (h *BotHandler) OnText(c tele.Context) error {
 			slog.String("Name", fund.Name),
 			slog.String("ICode", fund.InviteCode),
 		)
-		storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
-		msg := fmt.Sprintf("Fund Created🎉!\n\nFund Code🔑: <code>%s</code>\nFund URL🌐: <code>%s</code>\n\n You can share URL or Code with users your fund👍", fund.InviteCode, InviteCodeInviteURL)
-		ctxMsg, err := c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
+		var msg string
+		if botName != "" {
+			msg = fmt.Sprintf("Fund Created🎉!\n\nFund Code🔑: <code>%s</code>\nFund URL🌐: <code>%s</code>\n\n You can share URL or Code with users your fund👍", html.EscapeString(fund.InviteCode), html.EscapeString(inviteURL))
+		} else {
+			msg = fmt.Sprintf("Fund Created🎉!\n\nFund Code🔑: <code>%s</code>\n\n You can share Code with users your fund👍", html.EscapeString(fund.InviteCode))
+		}
+		ctxMsg, err := h.editOrSend(c, userCtx.LastMsgID, msg, h.BackMenu(), tele.ModeHTML)
 		if err != nil {
 			return h.error(c, "Failed to edit fund", err.Error(), Edit)
 		}
-		userCtx.LastMsgID = ctxMsg.ID
+		if ctxMsg != nil {
+			userCtx.LastMsgID = ctxMsg.ID
+		}
 	case domain.StateWaitFundJoinCode:
-
+		if utf8.RuneCountInString(rawText) > 30 {
+			err = errors.New("that invite code is too long! Please check it and try again")
+			return h.error(c, err.Error(), err.Error(), Edit)
+		}
 		fund := &domain.Fund{
-			InviteCode: text,
+			InviteCode: rawText,
 		}
 		fund, err := h.fundUC.GetInfo(ctx, fund)
 		if err != nil {
@@ -217,97 +271,122 @@ func (h *BotHandler) OnText(c tele.Context) error {
 
 		err = h.fundUC.AddMember(ctx, fund.ID, userCtx.InternalID)
 		if err != nil {
-			if strings.Contains(err.Error(), "SQLSTATE 23505") {
-				storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
+			if errors.Is(err, domain.ErrAlreadyMember) || strings.Contains(err.Error(), "SQLSTATE 23505") {
 				msg := "You already <b>exist</b> in this fund✅"
 				slog.Info("User already exist in fund", "user_id", userCtx.InternalID, "fund_id", fund.ID)
-				_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
-				return err
+				ctxMsg, editErr := h.editOrSend(c, userCtx.LastMsgID, msg, h.BackMenu(), tele.ModeHTML)
+				if ctxMsg != nil {
+					userCtx.LastMsgID = ctxMsg.ID
+				}
+				return editErr
 			}
 			return h.error(c, "Internal error, try again later", err.Error(), Edit)
 		}
-		storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
 		msg := "You successfully joined to fund🎉\n\n" +
 			"Go to <b>My Fund</b> to see this⬇️."
-		ctxMsg, err := c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
-
+		ctxMsg, err := h.editOrSend(c, userCtx.LastMsgID, msg, h.BackMenu(), tele.ModeHTML)
 		if err != nil {
 			return h.error(c, "Failed to edit fund", err.Error(), Edit)
 		}
-		userCtx.LastMsgID = ctxMsg.ID
+		if ctxMsg != nil {
+			userCtx.LastMsgID = ctxMsg.ID
+		}
 		slog.Info("Setting up fund join code", "id", userCtx.InternalID)
 	case domain.StateWaitUsername:
-		IID, err := h.userUC.CreateVirtualUser(ctx, fullText)
+		if utf8.RuneCountInString(rawText) > 30 {
+			err = errors.New("that name is too long! Let's go with something shorter (up to 30 characters) 😅")
+			return h.error(c, err.Error(), err.Error(), Edit)
+		}
+		if userCtx.ActiveFundID <= 0 {
+			return h.error(c, "No active fund selected", "active_fund_id <= 0", Edit)
+		}
+		IID, err := h.userUC.CreateVirtualUser(ctx, rawText)
 		if err != nil {
 			return h.error(c, "Failed to create user", err.Error(), Edit)
 		}
 		err = h.fundUC.AddMember(ctx, userCtx.ActiveFundID, IID)
 		if err != nil {
-			slog.Debug("ADD MEMBER METHOD ERR", "err", err, "user_id", userCtx.ActiveFundID, "fund_id", userCtx.ActiveFundID)
+			slog.Debug("ADD MEMBER METHOD ERR", "err", err, "user_id", IID, "fund_id", userCtx.ActiveFundID)
 			return h.error(c, "Failed to add fund", err.Error(), Edit)
 		}
 		userCtx.State = domain.StateSuccessAVU
-		storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
 		msg := fmt.Sprintf(
 			"✅ Member <b>%s(IID: %d)</b> successfully added to the fund!\n\n"+
 				"<i>You can now select them when logging new expenses.</i> 🧾",
-			text, IID,
+			html.EscapeString(rawText), IID,
 		)
-		_, err = c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
+		ctxMsg, err := h.editOrSend(c, userCtx.LastMsgID, msg, h.BackMenu(), tele.ModeHTML)
 		if err != nil {
 			return h.error(c, "Failed to edit fund", err.Error(), Edit)
 		}
-		return err
+		if ctxMsg != nil {
+			userCtx.LastMsgID = ctxMsg.ID
+		}
+		return nil
 	case domain.StateNone, domain.StateViewHistory, domain.StateFundMenu,
 		domain.StateViewFund, domain.StateViewSettleUp, domain.StateViewMembers,
 		domain.StateViewSuccessExp, domain.StateWaitToRemove, domain.StateRemovedSuccess,
 		domain.StateSuccessAVU, domain.StateDelete, domain.StateWaitDelete:
-		storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
 		msg := "No answer"
-		_, err := c.Bot().Edit(storedMsg, msg, h.BackMenu(), tele.ModeHTML)
+		ctxMsg, err := h.editOrSend(c, userCtx.LastMsgID, msg, h.BackMenu(), tele.ModeHTML)
 		if err != nil {
 			slog.Error("error to edit message", "id", userCtx.InternalID, "err", err.Error())
 			return err
 		}
+		if ctxMsg != nil {
+			userCtx.LastMsgID = ctxMsg.ID
+		}
 
 	default:
-		panic("You have unstatement case")
+		slog.Warn("Unhandled state in OnText", "state", userCtx.State)
+		userCtx.State = domain.StateNone
+		return nil
 	}
 	userCtx.State = domain.StateNone
 	return nil
 }
 
+func (h *BotHandler) editOrSend(c tele.Context, lastMsgID int, msg string, opts ...any) (*tele.Message, error) {
+	if lastMsgID != 0 && c.Chat() != nil {
+		storedMsg := &tele.Message{ID: lastMsgID, Chat: c.Chat()}
+		return c.Bot().Edit(storedMsg, msg, opts...)
+	}
+	if err := c.Send(msg, opts...); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
 func (h *BotHandler) error(c tele.Context, userMsg string, techMsg string, mode SendMode) error {
-	slog.Error("Technical error", "msg", techMsg, "tg_id", c.Sender().ID)
+	var senderID int64
+	if c.Sender() != nil {
+		senderID = c.Sender().ID
+	}
+	slog.Error("Technical error", "msg", techMsg, "tg_id", senderID)
 
 	displayMsg := "⚠️ <b>Oops! Something went wrong</b>\n\n" + userMsg
 
 	if c.Callback() != nil {
 		_ = c.Respond()
 	}
-	ctx := context.Background()
-	userCtx, err := h.statesUC.GetUserCtx(ctx, &c.Sender().ID)
-	if err != nil {
-		return fmt.Errorf("error getting user context: %s", err.Error())
-	}
-	defer func() {
-		err := h.statesUC.SaveUserCtx(ctx, &c.Sender().ID, userCtx)
-		if err != nil {
-			slog.Error("error saving user context", "user_id", c.Sender().ID, "err", err.Error())
-			return
-		}
-	}()
 
-	storedMsg := &tele.Message{ID: userCtx.LastMsgID, Chat: c.Chat()}
-
-	switch mode {
-	case Edit:
-		if userCtx.LastMsgID != 0 {
-			_, err := c.Bot().Edit(storedMsg, displayMsg, h.BackMenu(), tele.ModeHTML)
-			return err
+	var lastMsgID int
+	if c.Sender() != nil {
+		ctx, cancel := newOpCtx()
+		defer cancel()
+		userCtx, err := h.statesUC.GetUserCtx(ctx, &senderID)
+		if err == nil && userCtx != nil {
+			lastMsgID = userCtx.LastMsgID
 		}
-		return c.Send(displayMsg, h.BackMenu(), tele.ModeHTML)
-	default:
-		return c.Send(displayMsg, h.BackMenu(), tele.ModeHTML)
 	}
+	if lastMsgID == 0 && c.Callback() != nil && c.Message() != nil {
+		lastMsgID = c.Message().ID
+	}
+
+	if mode == Edit && lastMsgID != 0 && c.Chat() != nil {
+		storedMsg := &tele.Message{ID: lastMsgID, Chat: c.Chat()}
+		_, err := c.Bot().Edit(storedMsg, displayMsg, h.BackMenu(), tele.ModeHTML)
+		return err
+	}
+	return c.Send(displayMsg, h.BackMenu(), tele.ModeHTML)
 }

@@ -9,14 +9,15 @@ import (
 const words = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890"
 
 func GenerateInviteCode(lenCode int) string {
-	slice := strings.Split(words, "")
-	var sliceIC []string
-	for i := 0; i < lenCode; i++ {
-		randW := rand.IntN(62)
-		tempIC := slice[randW]
-		sliceIC = append(sliceIC, tempIC)
+	if lenCode <= 0 {
+		return ""
 	}
-	return strings.Join(sliceIC, "")
+	var sb strings.Builder
+	sb.Grow(lenCode)
+	for i := 0; i < lenCode; i++ {
+		sb.WriteByte(words[rand.IntN(len(words))])
+	}
+	return sb.String()
 }
 
 func GenerateInviteCodeURL(inviteCode string, botName string) string {

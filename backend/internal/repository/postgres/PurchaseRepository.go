@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 
 	"github.com/ganfay/split-core/internal/domain"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -18,53 +20,70 @@ func NewPurchaseRepository(pool *pgxpool.Pool) *PurchaseRepository {
 	return &PurchaseRepository{DB: pool}
 }
 
+func scanPurchases(rows pgx.Rows) ([]domain.Purchase, error) {
+	purchases := make([]domain.Purchase, 0)
+	for rows.Next() {
+		var p domain.Purchase
+		var username sql.NullString
+		var description sql.NullString
+		var isVirtual sql.NullBool
+		err := rows.Scan(
+			&p.ID,
+			&p.FundID,
+			&p.Payer.ID,
+			&p.Payer.TgID,
+			&username,
+			&p.Payer.FirstName,
+			&isVirtual,
+			&p.Amount,
+			&description,
+			&p.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		p.Payer.Username = username.String
+		p.Payer.IsVirtual = isVirtual.Bool
+		p.Description = description.String
+		purchases = append(purchases, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return purchases, nil
+}
+
 func (r *PurchaseRepository) GetPurchasesByFundPagination(ctx context.Context, fundID int, limit int, offset int) ([]domain.Purchase, error) {
 	query := `
-SELECT p.id, p.fund_id, p.payer_id, u.tg_id, u.username, u.first_name, p.amount, p.description, p.created_at
+SELECT p.id, p.fund_id, p.payer_id, u.tg_id, u.username, u.first_name, u.is_virtual, p.amount, p.description, p.created_at
 FROM app.purchases p 
 JOIN app.users u ON p.payer_id = u.id
 WHERE p.fund_id = $1
-ORDER BY created_at DESC
+ORDER BY p.created_at DESC
 OFFSET $2 LIMIT $3
 `
 	rows, err := r.DB.Query(ctx, query, fundID, offset, limit)
 	if err != nil {
 		return nil, err
 	}
-	var funds []domain.Purchase
-	for rows.Next() {
-		var tempPurchase domain.Purchase
-		err = rows.Scan(&tempPurchase.ID, &tempPurchase.FundID, &tempPurchase.Payer.ID, &tempPurchase.Payer.TgID, &tempPurchase.Payer.Username, &tempPurchase.Payer.FirstName, &tempPurchase.Amount, &tempPurchase.Description, &tempPurchase.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-		funds = append(funds, tempPurchase)
-	}
-	return funds, nil
+	defer rows.Close()
+	return scanPurchases(rows)
 }
 
 func (r *PurchaseRepository) GetPurchasesByFundAll(ctx context.Context, fundID int) ([]domain.Purchase, error) {
 	query := `
-SELECT p.id, p.fund_id, p.payer_id, u.tg_id, u.username, u.first_name, p.amount, p.description, p.created_at
+SELECT p.id, p.fund_id, p.payer_id, u.tg_id, u.username, u.first_name, u.is_virtual, p.amount, p.description, p.created_at
 FROM app.purchases p 
 JOIN app.users u ON p.payer_id = u.id
 WHERE p.fund_id = $1
-ORDER BY created_at DESC
+ORDER BY p.created_at DESC
 `
 	rows, err := r.DB.Query(ctx, query, fundID)
 	if err != nil {
 		return nil, err
 	}
-	var funds []domain.Purchase
-	for rows.Next() {
-		var tempPurchase domain.Purchase
-		err = rows.Scan(&tempPurchase.ID, &tempPurchase.FundID, &tempPurchase.Payer.ID, &tempPurchase.Payer.TgID, &tempPurchase.Payer.Username, &tempPurchase.Payer.FirstName, &tempPurchase.Amount, &tempPurchase.Description, &tempPurchase.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-		funds = append(funds, tempPurchase)
-	}
-	return funds, nil
+	defer rows.Close()
+	return scanPurchases(rows)
 }
 
 func (r *PurchaseRepository) CreatePurchase(ctx context.Context, fundID int, amount float64, IID int64, desc string) error {
